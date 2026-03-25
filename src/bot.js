@@ -18,10 +18,14 @@ function generateReffId(nomor, kode_produk, nama_produk) {
     return `${nomor}-${kode_produk}-${nama_produk.replace(/\s+/g, '')}-${uid}`;
 }
 
+const mainMenu = Markup.keyboard([
+    ['➕ Tambah', '📋 List']
+]).resize();
+
 const addPreorderWizard = new Scenes.WizardScene(
     'add-preorder',
     (ctx) => {
-        ctx.reply('Masukkan nomor tujuan:');
+        ctx.reply('Masukkan nomor tujuan:\n\n(Ketik "batal" untuk membatalkan)', Markup.removeKeyboard());
         return ctx.wizard.next();
     },
     (ctx) => {
@@ -29,6 +33,12 @@ const addPreorderWizard = new Scenes.WizardScene(
              ctx.reply('Harap masukkan teks nomor tujuan:');
              return;
         }
+        
+        if (ctx.message.text.toLowerCase() === 'batal') {
+            ctx.reply('Dibatalkan.', mainMenu);
+            return ctx.scene.leave();
+        }
+        
         ctx.wizard.state.nomor = ctx.message.text;
         
         const buttons = PRODUCTS.map(p => Markup.button.callback(`${p.nama} (${p.type})`, `select_${p.type}`));
@@ -66,7 +76,7 @@ const addPreorderWizard = new Scenes.WizardScene(
             
             db.get('preorders').push(newPreorder).write();
             
-            ctx.reply(`Pre-order berhasil ditambahkan!\nNomor: ${nomor}\nPaket: ${product.nama}\nReff ID: ${reff_id}`);
+            ctx.reply(`Pre-order berhasil ditambahkan!\nNomor: ${nomor}\nPaket: ${product.nama}\nReff ID: ${reff_id}`, mainMenu);
             logger.info('Preorder added', newPreorder);
             ctx.answerCbQuery();
             return ctx.scene.leave();
@@ -74,7 +84,123 @@ const addPreorderWizard = new Scenes.WizardScene(
     }
 );
 
-const stage = new Scenes.Stage([addPreorderWizard]);
+const deletePreorderWizard = new Scenes.WizardScene(
+    'delete-preorder',
+    (ctx) => {
+        ctx.reply('Masukkan ID pre-order yang ingin dihapus:\n\n(Ketik "batal" untuk membatalkan)', Markup.removeKeyboard());
+        return ctx.wizard.next();
+    },
+    (ctx) => {
+        if (!ctx.message || !ctx.message.text) return;
+        const id = ctx.message.text;
+        
+        if (id.toLowerCase() === 'batal') {
+            ctx.reply('Dibatalkan.', mainMenu);
+            return ctx.scene.leave();
+        }
+
+        const exists = db.get('preorders').find({ id }).value();
+        if (!exists) {
+            ctx.reply('Pre-order tidak ditemukan. Kembali ke menu utama.', mainMenu);
+            return ctx.scene.leave();
+        }
+        
+        db.get('preorders').remove({ id }).write();
+        ctx.reply(`Pre-order ID ${id} berhasil dihapus.`, mainMenu);
+        logger.info('Preorder deleted', { id });
+        return ctx.scene.leave();
+    }
+);
+
+const editPreorderWizard = new Scenes.WizardScene(
+    'edit-preorder',
+    (ctx) => {
+        const id = ctx.scene.state.editId;
+        if (id) {
+            const exists = db.get('preorders').find({ id }).value();
+            if (!exists) {
+                ctx.reply('Pre-order tidak ditemukan.', mainMenu);
+                return ctx.scene.leave();
+            }
+            ctx.wizard.state.editId = id;
+            ctx.reply(`Edit Pre-order ID: ${id}\nNomor lama: ${exists.nomor}\n\nMasukkan nomor tujuan baru:\n(Ketik "batal" untuk membatalkan)`, Markup.removeKeyboard());
+            ctx.wizard.selectStep(2);
+            return;
+        }
+
+        ctx.reply('Masukkan ID pre-order yang ingin diedit:\n\n(Ketik "batal" untuk membatalkan)', Markup.removeKeyboard());
+        return ctx.wizard.next();
+    },
+    (ctx) => {
+        if (!ctx.message || !ctx.message.text) return;
+        const id = ctx.message.text;
+
+        if (id.toLowerCase() === 'batal') {
+            ctx.reply('Dibatalkan.', mainMenu);
+            return ctx.scene.leave();
+        }
+        
+        const exists = db.get('preorders').find({ id }).value();
+        if (!exists) {
+            ctx.reply('Pre-order tidak ditemukan. Kembali ke menu utama.', mainMenu);
+            return ctx.scene.leave();
+        }
+        
+        ctx.wizard.state.editId = id;
+        ctx.reply(`Pre-order ditemukan.\nNomor lama: ${exists.nomor}\n\nMasukkan nomor tujuan baru:\n(Ketik "batal" untuk membatalkan)`);
+        return ctx.wizard.next();
+    },
+    (ctx) => {
+        if (!ctx.message || !ctx.message.text) return;
+        if (ctx.message.text.toLowerCase() === 'batal') {
+            ctx.reply('Dibatalkan.', mainMenu);
+            return ctx.scene.leave();
+        }
+        ctx.wizard.state.nomor = ctx.message.text;
+        
+        const buttons = PRODUCTS.map(p => Markup.button.callback(`${p.nama} (${p.type})`, `edit_select_${p.type}`));
+        const keyboard = Markup.inlineKeyboard(buttons, { columns: 2 });
+        
+        ctx.reply('Pilih paket Akrab baru:', keyboard);
+        return ctx.wizard.next();
+    },
+    (ctx) => {
+        if (!ctx.callbackQuery) return;
+        
+        const data = ctx.callbackQuery.data;
+        if (data.startsWith('edit_select_')) {
+            const kode = data.split('_')[2];
+            const product = PRODUCTS.find(p => p.type === kode);
+            if (!product) {
+                ctx.reply('Produk tidak ditemukan, ulangi proses.', mainMenu);
+                return ctx.scene.leave();
+            }
+            
+            const id = ctx.wizard.state.editId;
+            const nomor = ctx.wizard.state.nomor;
+            const newReffId = generateReffId(nomor, product.type, product.nama);
+            
+            db.get('preorders')
+              .find({ id })
+              .assign({
+                  nomor: nomor,
+                  kode_produk: product.type,
+                  nama_produk: product.nama,
+                  reff_id: newReffId,
+                  status: 'pending', // reset status
+                  keterangan: 'Edited'
+              })
+              .write();
+              
+            ctx.reply(`Pre-order ID ${id} berhasil diupdate.\nNomor: ${nomor}\nPaket: ${product.nama}\nReff ID Baru: ${newReffId}`, mainMenu);
+            logger.info('Preorder edited', { id, nomor, kode_produk: product.type });
+            ctx.answerCbQuery();
+            return ctx.scene.leave();
+        }
+    }
+);
+
+const stage = new Scenes.Stage([addPreorderWizard, deletePreorderWizard, editPreorderWizard]);
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
@@ -83,6 +209,8 @@ bot.use(stage.middleware());
 
 // Security middleware
 bot.use((ctx, next) => {
+    // We allow callback queries to pass if we can verify the user, 
+    // but ctx.from is usually available in callbackQuery as well.
     const username = ctx.from?.username?.toLowerCase();
     if (username === 'kingbhe' || username === 'umams1') {
         const chatId = ctx.chat?.id;
@@ -96,92 +224,88 @@ bot.use((ctx, next) => {
         return next();
     }
     logger.warn('Unauthorized access attempt', { user: ctx.from });
+    
+    // Check if it's a callback query to avoid error
+    if (ctx.callbackQuery) {
+        return ctx.answerCbQuery('Anda tidak memiliki akses.', { show_alert: true });
+    }
     return ctx.reply('Anda tidak memiliki akses ke bot ini.');
 });
 
 bot.command('start', (ctx) => {
-    ctx.reply('Selamat datang di Bot Pre-Order Kuota Akrab.\n\n/tambah - Tambah pre-order\n/list - Lihat daftar pre-order\n/hapus [id] - Hapus pre-order\n/edit [id] [nomor] [kodeproduk] - Edit pre-order');
+    ctx.reply('Selamat datang di Bot Pre-Order Kuota Akrab.\nSilakan pilih menu di bawah ini:', mainMenu);
 });
 
-bot.command('tambah', (ctx) => {
+bot.hears('➕ Tambah', (ctx) => {
     ctx.scene.enter('add-preorder');
 });
 
-bot.command('list', (ctx) => {
+bot.hears('📋 List', async (ctx) => {
     const preorders = db.get('preorders').value();
     if (!preorders || preorders.length === 0) {
-        return ctx.reply('Daftar pre-order kosong.');
+        return ctx.reply('Daftar pre-order kosong.', mainMenu);
     }
     
-    let msg = 'Daftar Pre-Order:\n\n';
-    preorders.forEach(p => {
-        msg += `ID: ${p.id}\n`;
-        msg += `Nomor: ${p.nomor}\n`;
-        msg += `Paket: ${p.nama_produk} (${p.kode_produk})\n`;
-        msg += `Status: ${p.status}\n`;
-        msg += `Reff ID: ${p.reff_id}\n`;
-        msg += `Keterangan: ${p.keterangan || '-'}\n\n`;
-    });
+    ctx.reply('Daftar Pre-Order:', mainMenu);
     
-    // Split message if too long for Telegram
-    const maxLength = 4000;
-    for (let i = 0; i < msg.length; i += maxLength) {
-        ctx.reply(msg.substring(i, i + maxLength));
+    for (const p of preorders) {
+        const msg = `ID: ${p.id}\nNomor: ${p.nomor}\nPaket: ${p.nama_produk} (${p.kode_produk})`;
+        const buttons = Markup.inlineKeyboard([
+            Markup.button.callback('Detail', `detail_${p.id}`),
+            Markup.button.callback('Edit', `editbtn_${p.id}`),
+            Markup.button.callback('Hapus', `deletebtn_${p.id}`)
+        ]);
+        await ctx.reply(msg, buttons);
     }
 });
 
-bot.command('hapus', (ctx) => {
-    const args = ctx.message.text.split(' ');
-    if (args.length < 2) {
-        return ctx.reply('Format salah. Gunakan: /hapus [id]');
+bot.action(/detail_(.+)/, async (ctx) => {
+    const id = ctx.match[1];
+    const p = db.get('preorders').find({ id }).value();
+    if (!p) {
+        return ctx.answerCbQuery('Pre-order tidak ditemukan.', { show_alert: true });
     }
-    const id = args[1];
     
+    let msg = `Detail Pre-Order:\n\n`;
+    msg += `ID: ${p.id}\n`;
+    msg += `Nomor: ${p.nomor}\n`;
+    msg += `Paket: ${p.nama_produk} (${p.kode_produk})\n`;
+    msg += `Status: ${p.status}\n`;
+    msg += `Reff ID: ${p.reff_id}\n`;
+    msg += `Keterangan: ${p.keterangan || '-'}\n`;
+    msg += `Dibuat: ${p.created_at}`;
+    
+    await ctx.answerCbQuery();
+    await ctx.reply(msg);
+});
+
+bot.action(/editbtn_(.+)/, async (ctx) => {
+    const id = ctx.match[1];
+    await ctx.answerCbQuery();
+    ctx.scene.enter('edit-preorder', { editId: id });
+});
+
+bot.action(/deletebtn_(.+)/, async (ctx) => {
+    const id = ctx.match[1];
     const exists = db.get('preorders').find({ id }).value();
     if (!exists) {
-        return ctx.reply('Pre-order tidak ditemukan.');
+        return ctx.answerCbQuery('Pre-order tidak ditemukan.', { show_alert: true });
     }
     
     db.get('preorders').remove({ id }).write();
-    ctx.reply(`Pre-order ID ${id} berhasil dihapus.`);
-    logger.info('Preorder deleted', { id });
+    await ctx.answerCbQuery('Pre-order berhasil dihapus.', { show_alert: true });
+    try {
+        await ctx.deleteMessage();
+    } catch (e) {
+        logger.warn('Failed to delete message', e);
+    }
+    logger.info('Preorder deleted via inline button', { id });
 });
 
-bot.command('edit', (ctx) => {
-    const args = ctx.message.text.split(' ');
-    if (args.length < 4) {
-        return ctx.reply('Format salah. Gunakan: /edit [id] [nomor] [kodeproduk]');
-    }
-    const id = args[1];
-    const nomor = args[2];
-    const kode_produk = args[3];
-    
-    const exists = db.get('preorders').find({ id }).value();
-    if (!exists) {
-        return ctx.reply('Pre-order tidak ditemukan.');
-    }
-    
-    const product = PRODUCTS.find(p => p.type === kode_produk);
-    if (!product) {
-        return ctx.reply('Kode produk tidak valid. Gunakan XLA14, XLA32, dsb.');
-    }
-    
-    const newReffId = generateReffId(nomor, product.type, product.nama);
-    
-    db.get('preorders')
-      .find({ id })
-      .assign({
-          nomor: nomor,
-          kode_produk: product.type,
-          nama_produk: product.nama,
-          reff_id: newReffId,
-          status: 'pending', // reset status
-          keterangan: 'Edited'
-      })
-      .write();
-      
-    ctx.reply(`Pre-order ID ${id} berhasil diupdate.\nNomor: ${nomor}\nPaket: ${product.nama}\nReff ID Baru: ${newReffId}`);
-    logger.info('Preorder edited', { id, nomor, kode_produk });
-});
+bot.command('tambah', (ctx) => ctx.scene.enter('add-preorder'));
+bot.command('list', (ctx) => bot.handleUpdate({ ...ctx.update, message: { text: '📋 List' } }));
+// We still keep the command text for manual entry or if users type it
+bot.command('hapus', (ctx) => ctx.scene.enter('delete-preorder'));
+bot.command('edit', (ctx) => ctx.scene.enter('edit-preorder'));
 
 module.exports = bot;
