@@ -1,0 +1,8 @@
+[2026-03-25T13:57:06.477Z] [ERROR] Failed to start bot {"response":{"error_code":401,"description":"Bot Token is required"},"on":{}}
+[2026-03-25T13:59:50.176Z] [WARN] Unauthorized access attempt {"user":{"id":5812019323,"is_bot":false,"first_name":"idxbhe","username":"Kingbhe","language_code":"en"}}
+[2026-03-25T14:00:19.747Z] [WARN] Unauthorized access attempt {"user":{"id":5812019323,"is_bot":false,"first_name":"idxbhe","username":"Kingbhe","language_code":"en"}}
+[2026-03-25T14:00:29.550Z] [WARN] Unauthorized access attempt {"user":{"id":5812019323,"is_bot":false,"first_name":"idxbhe","username":"Kingbhe","language_code":"en"}}
+[2026-03-25T14:04:28.911Z] [WARN] Unauthorized access attempt {"user":{"id":5812019323,"is_bot":false,"first_name":"idxbhe","username":"Kingbhe","language_code":"en"}}
+[2026-03-25T14:06:06.718Z] [ERROR] Failed to start bot {"message":"request to https://api.telegram.org/bot8645851343:[REDACTED]/getMe failed, reason: ","type":"system","errno":"ETIMEDOUT","code":"ETIMEDOUT"}
+[2026-03-25T14:07:00.556Z] [INFO] Preorder added {"id":"1774447620535","nomor":"0823135506815","kode_produk":"XLA14","nama_produk":"SuperMini","status":"pending","reff_id":"0823135506815-XLA14-SuperMini-ht5unk","trx_id":"","keterangan":"","created_at":"2026-03-25T14:07:00.535Z"}
+[2026-03-25T14:08:52.742Z] [INFO] Preorder deleted {"id":"1774447620535"}

@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Profile Downline — KHFY digital</title>
+  <script src="tailwin.js"></script>
+    <style>
+    /* Simple code styling */
+    pre {
+      border-radius: 0.75rem;
+      padding: 1rem;
+      overflow: auto;
+    }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .code-card {
+      border: 1px solid rgb(17 24 39 / 0.06);
+    }
+    .kbd {
+      border: 1px solid rgb(148 163 184 / 0.4);
+      border-bottom-width: 3px;
+      border-radius: .5rem;
+      padding: .15rem .45rem;
+      font-size: .8rem;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100">
+  <!-- Header -->
+  <header class="px-6 py-4 border-b border-slate-800 flex items-center justify-between sticky top-0 z-40 bg-slate-950/80 backdrop-blur">
+    <div class="flex items-center gap-3">
+      <!-- <div class="h-9 w-9 rounded-xl bg-gradient-to-tr from-blue-500 via-cyan-400 to-indigo-500"></div> -->
+         <img 
+    src="../logo.png" 
+    alt="Logo KhfyPay" 
+    class="h-9 w-9 rounded-xl object-cover"
+  />
+      <div>
+        <div class="text-xl font-bold">KhfyPay</div>
+        <div class="text-xs text-slate-400">Profile</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <section class="p-[1px] rounded-lg bg-gradient-to-r from-blue-500 via-cyan-400 to-indigo-500 text-xs">
+        <div class="rounded-lg bg-slate-900 px-2 py-1 flex items-center gap-2">
+          <div class="h-2 w-2 rounded-full bg-green-500"></div>
+          <div>
+            <div class="font-semibold leading-none">Gateway</div>
+            <div id="gatewayMsg" class="text-[10px] text-slate-300 leading-tight">online</div>
+          </div>
+        </div>
+      </section>
+      <button id="btnLogout" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Logout</button>
+    </div>
+  </header>
+
+  <!-- Tabs -->
+  <nav class="px-6 border-b border-slate-800 bg-slate-950 sticky top-[64px] z-30">
+    <div class="flex gap-4 overflow-x-auto">
+      <a class="px-3 py-3 text-slate-300 hover:text-white" href="dashboard.html">Dashboard</a>
+      <a class="px-3 py-3 text-slate-300 hover:text-white" href="#">Produk</a>
+      <a class="px-3 py-3 text-slate-300 hover:text-white" href="mutasi.html">Mutasi</a>
+      <a class="px-3 py-3 border-b-2 border-blue-500 text-white" href="#">Profile</a>
+    </div>
+  </nav>
+
+  <nav class="px-6 border-b border-slate-800 bg-slate-950 sticky top-[112px] z-20">
+    <div class="flex gap-3 overflow-x-auto">
+      <a class="px-3 py-2 text-slate-300 hover:text-white" href="profile.html">Pengaturan</a>
+      <a class="px-3 py-2 text-slate-300 hover:text-white" href="downline.html">Downline</a>
+      <a class="px-3 py-2 border-b-2 border-blue-500" href="#">Docs API</a>
+    </div>
+  </nav>
+
+
+<main class="max-w-7xl mx-auto px-4">
+    <div class="grid grid-cols-12 gap-6 py-8">
+      <!-- Sidebar -->
+      <aside class="hidden lg:block col-span-3">
+        <nav class="sticky top-20 space-y-2">
+          <a href="#overview" class="block px-3 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900">Overview</a>
+          <a href="#auth" class="block px-3 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900">Autentikasi</a>
+          <div>
+            <p class="px-3 py-2 text-xs uppercase tracking-wide text-slate-400">Endpoints</p>
+            <ul class="space-y-1">
+              <li><a href="#list-product" class="block px-3 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900">List Produk</a></li>
+              <li><a href="#trx" class="block px-3 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900">Transaksi</a></li>
+              <li><a href="#history" class="block px-3 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900">Cek Status</a></li>
+            </ul>
+          </div>
+          <a href="#webhook" class="block px-3 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900">Webhook</a>
+          <a href="#examples" class="block px-3 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900">Contoh Kode</a>
+          <a href="#tips" class="block px-3 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900">Tips & Praktik Baik</a>
+        </nav>
+      </aside>
+
+      <!-- Content -->
+      <section class="col-span-12 lg:col-span-9 space-y-10">
+        <!-- Overview -->
+        <section id="overview" class="space-y-4">
+          <h2 class="text-2xl font-bold">Overview</h2>
+          <p class="text-slate-600 dark:text-slate-300">
+            API ini digunakan untuk <span class="font-medium">melihat produk</span>, <span class="font-medium">membuat transaksi</span>, dan <span class="font-medium">mengecek status</span>.
+            Semua endpoint menggunakan HTTPS. Balasan dalam format JSON.
+          </p>
+          <br>
+          <p>
+                        kami juga menyediakan webhook untuk, informasi update status
+          </p>
+          </div>
+        </section>
+
+
+
+        <!-- List Product -->
+        <section id="list-product" class="space-y-4">
+          <h2 class="text-2xl font-bold">GET /list_product</h2>
+          <p class="text-slate-600 dark:text-slate-300">Lihat semua daftar produk tersedia.</p>
+          <div class="rounded-2xl border code-card p-4">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-300">Request</span>
+              <span class="text-xs kbd">GET</span>
+            </div>
+            <div class="mt-4 overflow-hidden rounded-xl">
+              <button class="copybtn float-right m-2 text-xs px-2 py-1 rounded bg-slate-200/60 dark:bg-slate-800">Copy</button>
+              <pre class="bg-slate-900 text-slate-100"><code>https://panel.khfy-store.com/api_v2/list_product?api_key=API_KEY_ANDA</code></pre>
+            </div>
+          </div>
+        </section>
+
+        <!-- Transaksi -->
+        <section id="trx" class="space-y-4">
+          <h2 class="text-2xl font-bold">GET /trx</h2>
+          <p class="text-slate-600 dark:text-slate-300">Buat transaksi baru.</p>
+          <div class="rounded-2xl border code-card p-4 space-y-4">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-300">Request</span>
+              <span class="text-xs kbd">GET</span>
+            </div>
+            <ul class="text-sm list-disc pl-5 space-y-1 text-slate-600 dark:text-slate-300">
+              <li><code>produk</code> — kode produk yang valid (lihat <a class="text-brand-600 dark:text-brand-400 underline" href="#list-product">List Produk</a>)</li>
+              <li><code>tujuan</code> — nomor tujuan</li>
+              <li><code>reff_id</code> — opsional; jika kosong akan dibuat UUID acak</li>
+              <li><code>api_key</code> — kunci API Anda</li>
+            </ul>
+            <div class="rounded-xl overflow-hidden">
+              <button class="copybtn float-right m-2 text-xs px-2 py-1 rounded bg-slate-200/60 dark:bg-slate-800">Copy</button>
+              <pre class="bg-slate-900 text-slate-100"><code>https://panel.khfy-store.com/api_v2/trx?produk=BPAL19&amp;tujuan=087812345678&amp;reff_id=123e4567-e89b-12d3-a456-426614174000&amp;api_key=API_KEY_ANDA</code></pre>
+            </div>
+          </div>
+        </section>
+
+        <!-- Cek Status -->
+        <section id="history" class="space-y-4">
+          <h2 class="text-2xl font-bold">GET /history</h2>
+          <p class="text-slate-600 dark:text-slate-300">Cek status transaksi by <code>refid</code>.</p>
+          <div class="rounded-2xl border code-card p-4">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-300">Request</span>
+              <span class="text-xs kbd">GET</span>
+            </div>
+            <div class="mt-4 overflow-hidden rounded-xl">
+              <button class="copybtn float-right m-2 text-xs px-2 py-1 rounded bg-slate-200/60 dark:bg-slate-800">Copy</button>
+              <pre class="bg-slate-900 text-slate-100"><code>https://panel.khfy-store.com/api_v2/history?api_key=API_KEY_ANDA&amp;refid=123e4567-e89b-12d3-a456-426614174000</code></pre>
+            </div>
+          </div>
+        </section>
+
+                <section id="cekstok" class="space-y-4">
+          <p class="text-slate-600 dark:text-slate-300">Cek Stock Akrab xl axis.</p>
+          <div class="rounded-2xl border code-card p-4">
+            <div class="mt-4 overflow-hidden rounded-xl">
+              <button class="copybtn float-right m-2 text-xs px-2 py-1 rounded bg-slate-200/60 dark:bg-slate-800">Copy</button>
+              <pre class="bg-slate-900 text-slate-100"><code>https://panel.khfy-store.com/api_v3/cek_stock_akrab</code></pre>
+            </div>
+          </div>
+        </section>
+        <!-- Webhook -->
+        <section id="webhook" class="space-y-4">
+          <h2 class="text-2xl font-bold">Webhook</h2>
+          <ol class="list-decimal pl-6 space-y-2 text-slate-600 dark:text-slate-300">
+            <li>Pasang URL webhook di <em>Profile → Pengaturan</em>.</li>
+            <li>Setiap transaksi sukses/gagal akan dikirim ke URL tersebut.</li>
+          </ol>
+          <div class="rounded-2xl border code-card p-4 space-y-3">
+            <h3 class="font-semibold">Format panggilan</h3>
+            <pre class="bg-slate-900 text-slate-100"><code>GET https://url-webhookkamu.com/webhook?message=&lt;pesan_dari_server_khfy&gt;</code></pre>
+            <p class="text-sm text-slate-600 dark:text-slate-300">Payload status ada di <code>message</code>. Gunakan regex pada contoh di bawah.</p>
+          </div>
+        </section>
+
+        <!-- Examples -->
+        <section id="examples" class="space-y-6">
+          <h2 class="text-2xl font-bold">Contoh Kode</h2>
+
+          <div class="rounded-2xl border code-card p-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-semibold">Node.js (Express)</h3>
+              <button class="copybtn text-xs px-2 py-1 rounded bg-slate-200/60 dark:bg-slate-800">Copy</button>
+            </div>
+            <pre class="bg-slate-900 text-slate-100"><code>
+const express = require('express');
+
+const app = express();
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+// Regex lebih fleksibel:
+// - Tangkap reffid, trxid, produk, tujuan, status_text, keterangan
+// - Bagian "Saldo ..." bersifat opsional
+// - "result=\\d" opsional; kalau tak ada, kita derive dari status_text
+const RX =
+  /RC=(?&lt;reffid&gt;[a-f0-9-]+)\s+TrxID=(?&lt;trxid&gt;\d+)\s+(?&lt;produk&gt;[A-Z0-9]+)\.(?&lt;tujuan&gt;\d+)\s+(?&lt;status_text&gt;[A-Za-z]+)\s*(?&lt;keterangan&gt;.+?)(?:\s+Saldo[\s\S]*?)?(?:\bresult=(?&lt;status_code&gt;\d+))?\s*&gt;?$/i;
+
+app.all('/webhook', async (req, res) => {
+  try {
+    const message =
+      (req.query && req.query.message) ||
+      (typeof req.body?.message === 'string' ? req.body.message : null);
+
+    if (!message) {
+      console.log('[WEBHOOK] message kosong');
+      return res.status(400).json({ ok: false, error: 'message kosong' });
+    }
+
+    const match = message.match(RX);
+    if (!match || !match.groups) {
+      console.log('[WEBHOOK] format tidak dikenali ->', message);
+      return res.status(200).json({ ok: false, error: 'format tidak dikenali' });
+    }
+
+    const {
+      trxid,
+      reffid,
+      produk,
+      tujuan,
+      status_text = '',
+      status_code: statusCodeRaw,
+    } = match.groups;
+
+    // Keterangan: bersihkan trailing spasi
+    const keterangan = (match.groups.keterangan || '').trim();
+
+    // Normalisasi status_code:
+    // 1) pakai result=... kalau ada
+    // 2) jika tidak ada, derive dari status_text
+    let status_code = null;
+    if (statusCodeRaw != null) {
+      status_code = Number(statusCodeRaw);
+    } else {
+      if (/sukses/i.test(status_text)) status_code = 0;
+      else if (/gagal|batal/i.test(status_text)) status_code = 1;
+    }
+
+    // --- Console logs ringkas & jelas ---
+    console.log('==== CALLBACK MASUK ====');
+    console.log('RAW        :', message);
+    console.log('reffid     :', reffid);
+    console.log('trxid      :', trxid);
+    console.log('produk     :', produk);
+    console.log('tujuan     :', tujuan);
+    console.log('status_txt :', status_text);
+    console.log('status_code:', status_code);
+    console.log('keterangan :', keterangan);
+    console.log('=========================');
+
+    // --- Blok aksi sesuai status_code (console.log dulu sesuai permintaan) ---
+    if (Number(status_code) === 0) {
+      console.log('[AKSI] Transaksi SUKSES -> jalankan flow sukses di sini');
+      // TODO: taruh flow sukses (update DB, callback internal, dsb.)
+    } else if (Number(status_code) === 1) {
+      console.log('[AKSI] Transaksi GAGAL/DIBATALKAN -> jalankan flow gagal di sini');
+      // TODO: taruh flow gagal
+    } else {
+      console.log('[AKSI] Status tidak dikenal / status_code null -> tandai untuk investigasi');
+    }
+
+    // Respons minimal agar pengirim tahu diterima
+    return res.status(200).json({
+      ok: true,
+      parsed: { trxid, reffid, produk, tujuan, status_text, status_code, keterangan },
+    });
+  } catch (err) {
+    console.log('[WEBHOOK][ERROR]', err?.message || err);
+    return res.status(500).json({ ok: false, error: 'internal_error', detail: err?.message || String(err) });
+  }
+});
+
+const PORT = process.env.PORT || 3300;
+app.listen(PORT, () => console.log(`Webhook listening on :${PORT}`));
+
+            </code></pre>
+          </div>
+
+          <div class="rounded-2xl border code-card p-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-semibold">PHP</h3>
+              <button class="copybtn text-xs px-2 py-1 rounded bg-slate-200/60 dark:bg-slate-800">Copy</button>
+            </div>
+
+            <pre class="bg-slate-900 text-slate-100"><code>
+&lt;?php
+declare(strict_types=1);
+header('Content-Type: application/json; charset=utf-8');
+
+// Ambil message dari query, POST form, atau JSON body
+$message = $_GET['message'] ?? null;
+
+if ($message === null) {
+    // Coba form-urlencoded
+    if (isset($_POST['message']) && is_string($_POST['message'])) {
+        $message = $_POST['message'];
+    } else {
+        // Coba JSON body
+        $raw = file_get_contents('php://input');
+        if ($raw !== false && strlen($raw) > 0) {
+            $json = json_decode($raw, true);
+            if (json_last_error() === JSON_ERROR_NONE && isset($json['message']) && is_string($json['message'])) {
+                $message = $json['message'];
+            }
+        }
+    }
+}
+
+if ($message === null || $message === '') {
+    error_log('[WEBHOOK] message kosong');
+    http_response_code(400);
+    echo json_encode(['ok' => false, 'error' => 'message kosong'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// Regex fleksibel (mirip versi JS)
+// - Tangkap reffid, trxid, produk, tujuan, status_text, keterangan
+// - Segmen "Saldo ..." opsional
+// - "result=\d" opsional; kalau tak ada, derive dari status_text
+$pattern = '~RC=(?P&lt;reffid&gt;[a-f0-9-]+)\s+TrxID=(?P&lt;trxid&gt;\d+)\s+(?P&lt;produk&gt;[A-Z0-9]+)\.(?P&lt;tujuan&gt;\d+)\s+(?P&lt;status_text&gt;[A-Za-z]+)\s*(?P&lt;keterangan&gt;.+?)(?:\s+Saldo[\s\S]*?)?(?:\bresult=(?P&lt;status_code&gt;\d+))?\s*&gt;?$~is';
+
+if (!preg_match($pattern, $message, $m)) {
+    error_log('[WEBHOOK] format tidak dikenali -> ' . $message);
+    echo json_encode(['ok' => false, 'error' => 'format tidak dikenali'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// Ambil fields
+$trxid       = $m['trxid']       ?? '';
+$reffid      = $m['reffid']      ?? '';
+$produk      = $m['produk']      ?? '';
+$tujuan      = $m['tujuan']      ?? '';
+$status_text = $m['status_text'] ?? '';
+$ketRaw      = $m['keterangan']  ?? '';
+$keterangan  = trim($ketRaw);
+
+// Normalisasi status_code:
+// 1) pakai result=... kalau ada
+// 2) kalau tidak ada, derive dari status_text
+$status_code = null;
+if (isset($m['status_code']) && $m['status_code'] !== '') {
+    $status_code = (int)$m['status_code'];
+} else {
+    if (preg_match('~sukses~i', $status_text)) {
+        $status_code = 0;
+    } elseif (preg_match('~gagal|batal~i', $status_text)) {
+        $status_code = 1;
+    }
+}
+
+// --- Logging ringkas ---
+error_log('==== CALLBACK MASUK ====');
+error_log('RAW        : ' . $message);
+error_log('reffid     : ' . $reffid);
+error_log('trxid      : ' . $trxid);
+error_log('produk     : ' . $produk);
+error_log('tujuan     : ' . $tujuan);
+error_log('status_txt : ' . $status_text);
+error_log('status_code: ' . var_export($status_code, true));
+error_log('keterangan : ' . $keterangan);
+error_log('=========================');
+
+// --- Blok aksi sesuai status_code (console log via error_log) ---
+if ($status_code === 0) {
+    error_log('[AKSI] Transaksi SUKSES -> jalankan flow sukses di sini');
+    // TODO: flow sukses (update DB, callback internal, dll)
+} elseif ($status_code === 1) {
+    error_log('[AKSI] Transaksi GAGAL/DIBATALKAN -> jalankan flow gagal di sini');
+    // TODO: flow gagal
+} else {
+    error_log('[AKSI] Status tidak dikenal / status_code null -> tandai untuk investigasi');
+}
+
+// Response minimal
+echo json_encode([
+    'ok'     => true,
+    'parsed' => [
+        'trxid'       => $trxid,
+        'reffid'      => $reffid,
+        'produk'      => $produk,
+        'tujuan'      => $tujuan,
+        'status_text' => $status_text,
+        'status_code' => $status_code,
+        'keterangan'  => $keterangan,
+    ],
+], JSON_UNESCAPED_UNICODE);
+
+            </code></pre>
+          </div>
+        </section>
+
+        <!-- Tips -->
+        <section id="tips" class="space-y-4">
+          <h2 class="text-2xl font-bold">Tips & Praktik Baik</h2>
+          <ul class="list-disc pl-6 space-y-2 text-slate-600 dark:text-slate-300">
+            <li>Gunakan <span class="font-mono">uuid</span> unik untuk <span class="font-mono">reff_id</span> agar mudah dilacak.</li>
+            <li>Simpan mapping <span class="font-mono">reff_id</span> ↔ order internal di database Anda.</li>
+            <li>Timeout di sisi klien & retry sebaiknya idempotent (gunakan reff_id yang sama saat retry).</li>
+            <li>Validasi nomor <span class="font-mono">tujuan</span> sebelum memanggil endpoint <span class="font-mono">/trx</span>.</li>
+            <li>Whitelist IP server webhook Anda & verifikasi signature (opsional, jika nanti tersedia).</li>
+          </ul>
+        </section>
+
+        <!-- Quickstart -->
+        <section id="quickstart" class="space-y-4">
+          <h2 class="text-2xl font-bold">Quickstart</h2>
+          <ol class="list-decimal pl-6 space-y-2 text-slate-600 dark:text-slate-300">
+            <li>Ambil <span class="font-mono">api_key</span> di <em>Profile → Pengaturan</em>.</li>
+            <li>Cek produk: <span class="font-mono">GET /list_product</span>.</li>
+            <li>Buat transaksi: <span class="font-mono">GET /trx</span>.</li>
+            <li>Cek status: <span class="font-mono">GET /history</span> (pakai <span class="font-mono">refid</span>).</li>
+            <li>Set webhook agar update status real-time diterima.</li>
+          </ol>
+        </section>
+
+        <footer class="pt-6 pb-12 text-sm text-slate-500 dark:text-slate-400">
+          © <span id="year"></span> KhfyPay. All rights reserved.
+        </footer>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    // Copy buttons
+    document.querySelectorAll('.copybtn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pre = btn.parentElement.querySelector('pre, code') || btn.closest('.code-card').querySelector('pre, code');
+        if (!pre) return;
+        const text = pre.innerText.replace(/\u00A0/g, ' ');
+        navigator.clipboard.writeText(text).then(() => {
+          const old = btn.textContent;
+          btn.textContent = 'Copied!';
+          setTimeout(()=> btn.textContent = old, 1200);
+        });
+      });
+    });
+
+    // Theme toggle (persist via localStorage)
+    const root = document.documentElement;
+    const key = 'khfy_docs_theme';
+    const cur = localStorage.getItem(key);
+    if (cur === 'dark' || (!cur && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      root.classList.add('dark');
+    }
+    document.getElementById('themeToggle').addEventListener('click', () => {
+      root.classList.toggle('dark');
+      localStorage.setItem(key, root.classList.contains('dark') ? 'dark' : 'light');
+    });
+
+    // Year
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+
+</body>
+</html>
