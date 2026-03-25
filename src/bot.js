@@ -19,43 +19,62 @@ function generateReffId(nomor, kode_produk, nama_produk) {
 }
 
 const mainMenu = Markup.keyboard([
-    ['➕ Tambah', '📋 List']
+    ['➕ Tambah', '📋 List'],
+    ['💰 Cek Saldo', '📦 Cek Stok']
 ]).resize();
 
 const addPreorderWizard = new Scenes.WizardScene(
     'add-preorder',
     (ctx) => {
-        ctx.reply('Masukkan nomor tujuan:\n\n(Ketik "batal" untuk membatalkan)', Markup.removeKeyboard());
+        ctx.reply('📱 Masukkan nomor tujuan:\n\n(Atau klik tombol di bawah untuk membatalkan)', Markup.inlineKeyboard([
+            Markup.button.callback('❌ Batal', 'cancel')
+        ]));
         return ctx.wizard.next();
     },
     (ctx) => {
+        if (ctx.callbackQuery && ctx.callbackQuery.data === 'cancel') {
+            ctx.reply('🚫 Dibatalkan.', mainMenu);
+            ctx.answerCbQuery();
+            return ctx.scene.leave();
+        }
+        
         if (!ctx.message || !ctx.message.text) {
-             ctx.reply('Harap masukkan teks nomor tujuan:');
+             ctx.reply('⚠️ Harap masukkan teks nomor tujuan:');
              return;
         }
         
         if (ctx.message.text.toLowerCase() === 'batal') {
-            ctx.reply('Dibatalkan.', mainMenu);
+            ctx.reply('🚫 Dibatalkan.', mainMenu);
             return ctx.scene.leave();
         }
         
         ctx.wizard.state.nomor = ctx.message.text;
         
-        const buttons = PRODUCTS.map(p => Markup.button.callback(`${p.nama} (${p.type})`, `select_${p.type}`));
-        const keyboard = Markup.inlineKeyboard(buttons, { columns: 2 });
+        const buttons = PRODUCTS.map(p => Markup.button.callback(`📦 ${p.nama} (${p.type})`, `select_${p.type}`));
+        const keyboardOptions = [];
+        for (let i = 0; i < buttons.length; i += 2) {
+            keyboardOptions.push(buttons.slice(i, i + 2));
+        }
+        keyboardOptions.push([Markup.button.callback('❌ Batal', 'cancel')]);
         
-        ctx.reply('Pilih paket Akrab:', keyboard);
+        ctx.reply('📦 Pilih paket Akrab:', Markup.inlineKeyboard(keyboardOptions));
         return ctx.wizard.next();
     },
     (ctx) => {
         if (!ctx.callbackQuery) return;
         
         const data = ctx.callbackQuery.data;
+        if (data === 'cancel') {
+            ctx.reply('🚫 Dibatalkan.', mainMenu);
+            ctx.answerCbQuery();
+            return ctx.scene.leave();
+        }
+        
         if (data.startsWith('select_')) {
             const kode = data.split('_')[1];
             const product = PRODUCTS.find(p => p.type === kode);
             if (!product) {
-                ctx.reply('Produk tidak ditemukan, ulangi proses.');
+                ctx.reply('❌ Produk tidak ditemukan, ulangi proses.');
                 return ctx.scene.leave();
             }
             
@@ -76,7 +95,7 @@ const addPreorderWizard = new Scenes.WizardScene(
             
             db.get('preorders').push(newPreorder).write();
             
-            ctx.reply(`Pre-order berhasil ditambahkan!\nNomor: ${nomor}\nPaket: ${product.nama}\nReff ID: ${reff_id}`, mainMenu);
+            ctx.reply(`✅ Pre-order berhasil ditambahkan!\n\n📱 Nomor: ${nomor}\n📦 Paket: ${product.nama}\n🔖 Reff ID: ${reff_id}`, mainMenu);
             logger.info('Preorder added', newPreorder);
             ctx.answerCbQuery();
             return ctx.scene.leave();
@@ -87,26 +106,34 @@ const addPreorderWizard = new Scenes.WizardScene(
 const deletePreorderWizard = new Scenes.WizardScene(
     'delete-preorder',
     (ctx) => {
-        ctx.reply('Masukkan ID pre-order yang ingin dihapus:\n\n(Ketik "batal" untuk membatalkan)', Markup.removeKeyboard());
+        ctx.reply('🗑️ Masukkan ID pre-order yang ingin dihapus:\n\n(Atau klik tombol di bawah untuk membatalkan)', Markup.inlineKeyboard([
+            Markup.button.callback('❌ Batal', 'cancel')
+        ]));
         return ctx.wizard.next();
     },
     (ctx) => {
+        if (ctx.callbackQuery && ctx.callbackQuery.data === 'cancel') {
+            ctx.reply('🚫 Dibatalkan.', mainMenu);
+            ctx.answerCbQuery();
+            return ctx.scene.leave();
+        }
+        
         if (!ctx.message || !ctx.message.text) return;
         const id = ctx.message.text;
         
         if (id.toLowerCase() === 'batal') {
-            ctx.reply('Dibatalkan.', mainMenu);
+            ctx.reply('🚫 Dibatalkan.', mainMenu);
             return ctx.scene.leave();
         }
 
         const exists = db.get('preorders').find({ id }).value();
         if (!exists) {
-            ctx.reply('Pre-order tidak ditemukan. Kembali ke menu utama.', mainMenu);
+            ctx.reply('❌ Pre-order tidak ditemukan. Kembali ke menu utama.', mainMenu);
             return ctx.scene.leave();
         }
         
         db.get('preorders').remove({ id }).write();
-        ctx.reply(`Pre-order ID ${id} berhasil dihapus.`, mainMenu);
+        ctx.reply(`✅ Pre-order ID ${id} berhasil dihapus.`, mainMenu);
         logger.info('Preorder deleted', { id });
         return ctx.scene.leave();
     }
@@ -119,60 +146,88 @@ const editPreorderWizard = new Scenes.WizardScene(
         if (id) {
             const exists = db.get('preorders').find({ id }).value();
             if (!exists) {
-                ctx.reply('Pre-order tidak ditemukan.', mainMenu);
+                ctx.reply('❌ Pre-order tidak ditemukan.', mainMenu);
                 return ctx.scene.leave();
             }
             ctx.wizard.state.editId = id;
-            ctx.reply(`Edit Pre-order ID: ${id}\nNomor lama: ${exists.nomor}\n\nMasukkan nomor tujuan baru:\n(Ketik "batal" untuk membatalkan)`, Markup.removeKeyboard());
+            ctx.reply(`✏️ Edit Pre-order ID: ${id}\n📱 Nomor lama: ${exists.nomor}\n\nMasukkan nomor tujuan baru:\n(Atau klik tombol di bawah untuk membatalkan)`, Markup.inlineKeyboard([
+                Markup.button.callback('❌ Batal', 'cancel')
+            ]));
             ctx.wizard.selectStep(2);
             return;
         }
 
-        ctx.reply('Masukkan ID pre-order yang ingin diedit:\n\n(Ketik "batal" untuk membatalkan)', Markup.removeKeyboard());
+        ctx.reply('✏️ Masukkan ID pre-order yang ingin diedit:\n\n(Atau klik tombol di bawah untuk membatalkan)', Markup.inlineKeyboard([
+            Markup.button.callback('❌ Batal', 'cancel')
+        ]));
         return ctx.wizard.next();
     },
     (ctx) => {
+        if (ctx.callbackQuery && ctx.callbackQuery.data === 'cancel') {
+            ctx.reply('🚫 Dibatalkan.', mainMenu);
+            ctx.answerCbQuery();
+            return ctx.scene.leave();
+        }
+        
         if (!ctx.message || !ctx.message.text) return;
         const id = ctx.message.text;
 
         if (id.toLowerCase() === 'batal') {
-            ctx.reply('Dibatalkan.', mainMenu);
+            ctx.reply('🚫 Dibatalkan.', mainMenu);
             return ctx.scene.leave();
         }
         
         const exists = db.get('preorders').find({ id }).value();
         if (!exists) {
-            ctx.reply('Pre-order tidak ditemukan. Kembali ke menu utama.', mainMenu);
+            ctx.reply('❌ Pre-order tidak ditemukan. Kembali ke menu utama.', mainMenu);
             return ctx.scene.leave();
         }
         
         ctx.wizard.state.editId = id;
-        ctx.reply(`Pre-order ditemukan.\nNomor lama: ${exists.nomor}\n\nMasukkan nomor tujuan baru:\n(Ketik "batal" untuk membatalkan)`);
+        ctx.reply(`✅ Pre-order ditemukan.\n📱 Nomor lama: ${exists.nomor}\n\nMasukkan nomor tujuan baru:\n(Atau klik tombol di bawah untuk membatalkan)`, Markup.inlineKeyboard([
+            Markup.button.callback('❌ Batal', 'cancel')
+        ]));
         return ctx.wizard.next();
     },
     (ctx) => {
+        if (ctx.callbackQuery && ctx.callbackQuery.data === 'cancel') {
+            ctx.reply('🚫 Dibatalkan.', mainMenu);
+            ctx.answerCbQuery();
+            return ctx.scene.leave();
+        }
+        
         if (!ctx.message || !ctx.message.text) return;
         if (ctx.message.text.toLowerCase() === 'batal') {
-            ctx.reply('Dibatalkan.', mainMenu);
+            ctx.reply('🚫 Dibatalkan.', mainMenu);
             return ctx.scene.leave();
         }
         ctx.wizard.state.nomor = ctx.message.text;
         
-        const buttons = PRODUCTS.map(p => Markup.button.callback(`${p.nama} (${p.type})`, `edit_select_${p.type}`));
-        const keyboard = Markup.inlineKeyboard(buttons, { columns: 2 });
+        const buttons = PRODUCTS.map(p => Markup.button.callback(`📦 ${p.nama} (${p.type})`, `edit_select_${p.type}`));
+        const keyboardOptions = [];
+        for (let i = 0; i < buttons.length; i += 2) {
+            keyboardOptions.push(buttons.slice(i, i + 2));
+        }
+        keyboardOptions.push([Markup.button.callback('❌ Batal', 'cancel')]);
         
-        ctx.reply('Pilih paket Akrab baru:', keyboard);
+        ctx.reply('📦 Pilih paket Akrab baru:', Markup.inlineKeyboard(keyboardOptions));
         return ctx.wizard.next();
     },
     (ctx) => {
         if (!ctx.callbackQuery) return;
         
         const data = ctx.callbackQuery.data;
+        if (data === 'cancel') {
+            ctx.reply('🚫 Dibatalkan.', mainMenu);
+            ctx.answerCbQuery();
+            return ctx.scene.leave();
+        }
+        
         if (data.startsWith('edit_select_')) {
             const kode = data.split('_')[2];
             const product = PRODUCTS.find(p => p.type === kode);
             if (!product) {
-                ctx.reply('Produk tidak ditemukan, ulangi proses.', mainMenu);
+                ctx.reply('❌ Produk tidak ditemukan, ulangi proses.', mainMenu);
                 return ctx.scene.leave();
             }
             
@@ -192,7 +247,7 @@ const editPreorderWizard = new Scenes.WizardScene(
               })
               .write();
               
-            ctx.reply(`Pre-order ID ${id} berhasil diupdate.\nNomor: ${nomor}\nPaket: ${product.nama}\nReff ID Baru: ${newReffId}`, mainMenu);
+            ctx.reply(`✅ Pre-order ID ${id} berhasil diupdate.\n\n📱 Nomor: ${nomor}\n📦 Paket: ${product.nama}\n🔖 Reff ID Baru: ${newReffId}`, mainMenu);
             logger.info('Preorder edited', { id, nomor, kode_produk: product.type });
             ctx.answerCbQuery();
             return ctx.scene.leave();
@@ -227,13 +282,13 @@ bot.use((ctx, next) => {
     
     // Check if it's a callback query to avoid error
     if (ctx.callbackQuery) {
-        return ctx.answerCbQuery('Anda tidak memiliki akses.', { show_alert: true });
+        return ctx.answerCbQuery('❌ Anda tidak memiliki akses.', { show_alert: true });
     }
-    return ctx.reply('Anda tidak memiliki akses ke bot ini.');
+    return ctx.reply('❌ Anda tidak memiliki akses ke bot ini.');
 });
 
 bot.command('start', (ctx) => {
-    ctx.reply('Selamat datang di Bot Pre-Order Kuota Akrab.\nSilakan pilih menu di bawah ini:', mainMenu);
+    ctx.reply('👋 Selamat datang di Bot Pre-Order Kuota Akrab.\n\nSilakan pilih menu di bawah ini:', mainMenu);
 });
 
 bot.hears('➕ Tambah', (ctx) => {
@@ -243,19 +298,46 @@ bot.hears('➕ Tambah', (ctx) => {
 bot.hears('📋 List', async (ctx) => {
     const preorders = db.get('preorders').value();
     if (!preorders || preorders.length === 0) {
-        return ctx.reply('Daftar pre-order kosong.', mainMenu);
+        return ctx.reply('📭 Daftar pre-order kosong.', mainMenu);
     }
     
-    ctx.reply('Daftar Pre-Order:', mainMenu);
+    ctx.reply('📋 Daftar Pre-Order:', mainMenu);
     
     for (const p of preorders) {
-        const msg = `ID: ${p.id}\nNomor: ${p.nomor}\nPaket: ${p.nama_produk} (${p.kode_produk})`;
+        const msg = `🆔 ID: ${p.id}\n📱 Nomor: ${p.nomor}\n📦 Paket: ${p.nama_produk} (${p.kode_produk})`;
         const buttons = Markup.inlineKeyboard([
-            Markup.button.callback('Detail', `detail_${p.id}`),
-            Markup.button.callback('Edit', `editbtn_${p.id}`),
-            Markup.button.callback('Hapus', `deletebtn_${p.id}`)
+            Markup.button.callback('🔍 Detail', `detail_${p.id}`),
+            Markup.button.callback('✏️ Edit', `editbtn_${p.id}`),
+            Markup.button.callback('🗑️ Hapus', `deletebtn_${p.id}`)
         ]);
         await ctx.reply(msg, buttons);
+    }
+});
+
+bot.hears('💰 Cek Saldo', (ctx) => {
+    ctx.reply('💰 Saldo Anda saat ini: Rp 0\n\n*(Fitur dalam pengembangan)*', { parse_mode: 'Markdown', ...mainMenu });
+});
+
+bot.hears('📦 Cek Stok', async (ctx) => {
+    try {
+        const api = require('./api');
+        const stockRes = await api.cekStock();
+        const stocks = stockRes.data;
+        
+        let msg = '📦 Stok saat ini:\n\n';
+        if (stocks && stocks.length > 0) {
+            PRODUCTS.forEach(p => {
+                const stockData = stocks.find(s => s.type === p.type);
+                const sisa = stockData ? stockData.sisa_slot : p.sisa_slot;
+                msg += `- ${p.nama} (${p.type}): ${sisa} slot\n`;
+            });
+        } else {
+            msg += 'Data stok tidak ditemukan atau kosong.';
+        }
+        ctx.reply(msg, { parse_mode: 'Markdown', ...mainMenu });
+    } catch (error) {
+        ctx.reply('❌ Gagal mengambil data stok dari server.', { ...mainMenu });
+        logger.error('Failed to get stock in bot', { error: error.message });
     }
 });
 
@@ -263,17 +345,17 @@ bot.action(/detail_(.+)/, async (ctx) => {
     const id = ctx.match[1];
     const p = db.get('preorders').find({ id }).value();
     if (!p) {
-        return ctx.answerCbQuery('Pre-order tidak ditemukan.', { show_alert: true });
+        return ctx.answerCbQuery('❌ Pre-order tidak ditemukan.', { show_alert: true });
     }
     
-    let msg = `Detail Pre-Order:\n\n`;
-    msg += `ID: ${p.id}\n`;
-    msg += `Nomor: ${p.nomor}\n`;
-    msg += `Paket: ${p.nama_produk} (${p.kode_produk})\n`;
-    msg += `Status: ${p.status}\n`;
-    msg += `Reff ID: ${p.reff_id}\n`;
-    msg += `Keterangan: ${p.keterangan || '-'}\n`;
-    msg += `Dibuat: ${p.created_at}`;
+    let msg = `🔍 Detail Pre-Order:\n\n`;
+    msg += `🆔 ID: ${p.id}\n`;
+    msg += `📱 Nomor: ${p.nomor}\n`;
+    msg += `📦 Paket: ${p.nama_produk} (${p.kode_produk})\n`;
+    msg += `⏳ Status: ${p.status}\n`;
+    msg += `🔖 Reff ID: ${p.reff_id}\n`;
+    msg += `📝 Keterangan: ${p.keterangan || '-'}\n`;
+    msg += `📅 Dibuat: ${p.created_at}`;
     
     await ctx.answerCbQuery();
     await ctx.reply(msg);
@@ -289,11 +371,11 @@ bot.action(/deletebtn_(.+)/, async (ctx) => {
     const id = ctx.match[1];
     const exists = db.get('preorders').find({ id }).value();
     if (!exists) {
-        return ctx.answerCbQuery('Pre-order tidak ditemukan.', { show_alert: true });
+        return ctx.answerCbQuery('❌ Pre-order tidak ditemukan.', { show_alert: true });
     }
     
     db.get('preorders').remove({ id }).write();
-    await ctx.answerCbQuery('Pre-order berhasil dihapus.', { show_alert: true });
+    await ctx.answerCbQuery('✅ Pre-order berhasil dihapus.', { show_alert: true });
     try {
         await ctx.deleteMessage();
     } catch (e) {
