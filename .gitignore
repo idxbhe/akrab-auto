@@ -1,0 +1,9 @@
+.env
+GEMINI.md
+todo.md
+node_modules/
+package-lock.json
+db.json
+plan.md
+bot.log
+.testenv

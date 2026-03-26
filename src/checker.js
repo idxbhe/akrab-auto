@@ -60,11 +60,12 @@ async function checkAndProcess(bot) {
 
         for (const preorder of ordersToTrx) {
             const productStock = stocks.find(s => s.type === preorder.kode_produk);
+            const sisaSlot = productStock ? parseInt(productStock.sisa_slot, 10) : 0;
             
-            if (productStock && productStock.sisa_slot > 0) {
-                logger.info(`Stock found for ${preorder.kode_produk}. Executing trx...`, preorder);
+            if (productStock && sisaSlot > 0) {
+                logger.info(`Stock found for ${preorder.kode_produk} (Slot: ${sisaSlot}). Executing trx...`, { id: preorder.id });
                 
-                broadcastToAdmins(bot, `🔔 <b>MEMULAI TRANSAKSI</b> 🔔\n\nID: <code>${preorder.id}</code>\nNomor: <code>${preorder.nomor}</code>\nProduk: ${preorder.nama_produk} (${preorder.kode_produk})\nReff ID: <code>${preorder.reff_id}</code>\nSisa Slot di server: ${productStock.sisa_slot}`);
+                broadcastToAdmins(bot, `🔔 <b>MEMULAI TRANSAKSI</b> 🔔\n\nID: <code>${preorder.id}</code>\nNomor: <code>${preorder.nomor}</code>\nProduk: ${preorder.nama_produk} (${preorder.kode_produk})\nReff ID: <code>${preorder.reff_id}</code>\nSisa Slot di server: ${sisaSlot}`);
 
                 try {
                     const trxRes = await api.doTransaksi(preorder.kode_produk, preorder.nomor, preorder.reff_id);
@@ -95,6 +96,13 @@ async function checkAndProcess(bot) {
                       .write();
                       
                     broadcastToAdmins(bot, `❌ <b>TRANSAKSI GAGAL/ERROR KONEKSI</b> ❌\n\nID: <code>${preorder.id}</code>\nError: ${error.message}\n\nMasuk ke status <b>error</b>. Harap cek manual atau gunakan /edit untuk mengulang.`);
+                }
+            } else {
+                // Tambahkan log jika stok tidak cukup atau produk tidak ditemukan
+                if (!productStock) {
+                    logger.warn(`Product ${preorder.kode_produk} not found in stock data`);
+                } else if (sisaSlot <= 0) {
+                    // logger.info(`Stock for ${preorder.kode_produk} is empty (${sisaSlot})`);
                 }
             }
         }
