@@ -307,9 +307,14 @@ bot.hears('📋 List', async (ctx) => {
     for (const p of preorders) {
         const msg = `🆔 ID: ${p.id}\n📱 Nomor: ${p.nomor}\n📦 Paket: ${p.nama_produk} (${p.kode_produk})`;
         const buttons = Markup.inlineKeyboard([
-            Markup.button.callback('🔍 Detail', `detail_${p.id}`),
-            Markup.button.callback('✏️ Edit', `editbtn_${p.id}`),
-            Markup.button.callback('🗑️ Hapus', `deletebtn_${p.id}`)
+            [
+                Markup.button.callback('🔍 Detail', `detail_${p.id}`),
+                Markup.button.callback('🚀 Transac', `transac_${p.id}`)
+            ],
+            [
+                Markup.button.callback('✏️ Edit', `editbtn_${p.id}`),
+                Markup.button.callback('🗑️ Hapus', `deletebtn_${p.id}`)
+            ]
         ]);
         await ctx.reply(msg, buttons);
     }
@@ -359,6 +364,54 @@ bot.action(/detail_(.+)/, async (ctx) => {
     
     await ctx.answerCbQuery();
     await ctx.reply(msg);
+});
+
+bot.action(/transac_(.+)/, async (ctx) => {
+    const id = ctx.match[1];
+    const p = db.get('preorders').find({ id }).value();
+    if (!p) {
+        return ctx.answerCbQuery('❌ Pre-order tidak ditemukan.', { show_alert: true });
+    }
+    
+    await ctx.answerCbQuery('Mengeksekusi transaksi manual...', { show_alert: false });
+    
+    try {
+        const trxRes = await api.doTransaksi(p.kode_produk, p.nomor, p.reff_id);
+        logger.info(`Manual Trx result for ${p.id}`, trxRes);
+        
+        db.get('preorders')
+          .find({ id: p.id })
+          .assign({
+              status: 'retrying',
+              needsTrx: false,
+              keterangan: 'Manual: ' + JSON.stringify(trxRes),
+              updated_at: new Date().toISOString()
+          })
+          .write();
+          
+        let msg = `✅ <b>TRANSAKSI MANUAL TERKIRIM</b> ✅\n\n`;
+        msg += `🆔 ID: <code>${p.id}</code>\n`;
+        msg += `📱 Nomor: <code>${p.nomor}</code>\n`;
+        msg += `📦 Paket: ${p.nama_produk} (${p.kode_produk})\n`;
+        msg += `🔖 Reff ID: <code>${p.reff_id}</code>\n\n`;
+        msg += `Response:\n<pre>${JSON.stringify(trxRes, null, 2)}</pre>\n\nStatus diubah ke <b>retrying</b>.`;
+        
+        await ctx.reply(msg, { parse_mode: 'HTML' });
+    } catch (error) {
+        logger.error(`Manual Trx failed for ${p.id}`, error.message);
+        
+        db.get('preorders')
+          .find({ id: p.id })
+          .assign({
+              status: 'retrying',
+              needsTrx: true,
+              keterangan: 'Manual Error: ' + error.message,
+              updated_at: new Date().toISOString()
+          })
+          .write();
+          
+        await ctx.reply(`❌ <b>TRANSAKSI MANUAL GAGAL/ERROR</b> ❌\n\nID: <code>${p.id}</code>\nError: ${error.message}\n\nStatus <b>retrying</b> (Auto-Retry).`, { parse_mode: 'HTML' });
+    }
 });
 
 bot.action(/editbtn_(.+)/, async (ctx) => {

@@ -9,11 +9,13 @@ async function checkAndProcess(bot) {
         // 1. Process history for 'retrying' orders
         const retryingOrders = preorders.filter(p => p.status === 'retrying');
         for (const p of retryingOrders) {
+            if (p.needsTrx) continue; // Skip history check if it's already queued for retry
             try {
                 const historyRes = await api.cekHistory(p.reff_id);
                 logger.info(`History for ${p.id}`, historyRes);
                 
                 const historyStr = JSON.stringify(historyRes).toLowerCase();
+                const isFailed = historyStr.includes('gagal') || historyStr.includes('failed') || historyStr.includes('batal') || historyStr.includes('tidak ditemukan') || historyStr.includes('"ok":false') || historyStr.includes('"status":false');
                 
                 // Cek status berdasarkan respon Khfy
                 if (historyStr.includes('sukses') || historyStr.includes('success')) {
@@ -26,7 +28,7 @@ async function checkAndProcess(bot) {
                       .write();
                       
                     broadcastToAdmins(bot, `🎉 <b>TRANSAKSI SUKSES</b> 🎉\n\nID: <code>${p.id}</code>\nNomor: ${p.nomor}\nPaket: ${p.nama_produk}`);
-                } else if (historyStr.includes('gagal') || historyStr.includes('failed') || historyStr.includes('batal')) {
+                } else if (isFailed) {
                     // Transaksi gagal dari sisi server, set flag needsTrx di DB
                     db.get('preorders')
                       .find({ id: p.id })
@@ -36,10 +38,15 @@ async function checkAndProcess(bot) {
                       })
                       .write();
                       
-                    broadcastToAdmins(bot, `⚠️ <b>TRANSAKSI GAGAL/BATAL DARI SERVER</b> ⚠️\n\nID: <code>${p.id}</code>\nStatus tetap <b>retrying</b> (akan diulang saat stok tersedia)`);
+                    broadcastToAdmins(bot, `⚠️ <b>TRANSAKSI GAGAL/BATAL/TIDAK DITEMUKAN</b> ⚠️\n\nID: <code>${p.id}</code>\nStatus dikembalikan ke <b>retrying (needsTrx)</b>`);
                 }
             } catch (err) {
                  logger.error(`History check failed for ${p.id}`, err.message);
+                 if (err.response && (err.response.status === 404 || err.response.status === 500)) {
+                     // Assume transaction not found or server error, allow retry
+                     db.get('preorders').find({ id: p.id }).assign({ needsTrx: true, updated_at: new Date().toISOString() }).write();
+                     broadcastToAdmins(bot, `⚠️ <b>HISTORY ERROR (AUTO-RETRY)</b> ⚠️\n\nID: <code>${p.id}</code>\nError: ${err.message}`);
+                 }
             }
         }
 
@@ -71,17 +78,33 @@ async function checkAndProcess(bot) {
                     const trxRes = await api.doTransaksi(preorder.kode_produk, preorder.nomor, preorder.reff_id);
                     logger.info(`Trx result for ${preorder.id}`, trxRes);
                     
-                    db.get('preorders')
-                      .find({ id: preorder.id })
-                      .assign({
-                          status: 'retrying',
-                          needsTrx: false, // reset flag setelah trx dikirim
-                          keterangan: JSON.stringify(trxRes),
-                          updated_at: new Date().toISOString()
-                      })
-                      .write();
-                      
-                    broadcastToAdmins(bot, `✅ <b>TRANSAKSI TERKIRIM</b> ✅\n\nID: <code>${preorder.id}</code>\nResponse:\n<pre>${JSON.stringify(trxRes, null, 2)}</pre>\n\nStatus diubah/tetap <b>retrying</b> untuk memantau history.`);
+                    const isFailedTrx = !trxRes || trxRes.ok === false || trxRes.status === false || (trxRes.message && trxRes.message.toLowerCase().includes('gagal'));
+
+                    if (isFailedTrx) {
+                        db.get('preorders')
+                          .find({ id: preorder.id })
+                          .assign({
+                              status: 'retrying',
+                              needsTrx: true, // tetapkan true agar diulang kembali jika gagal logika
+                              keterangan: JSON.stringify(trxRes),
+                              updated_at: new Date().toISOString()
+                          })
+                          .write();
+                          
+                        broadcastToAdmins(bot, `⚠️ <b>TRANSAKSI DITOLAK SERVER (AUTO-RETRY)</b> ⚠️\n\nID: <code>${preorder.id}</code>\nResponse:\n<pre>${JSON.stringify(trxRes, null, 2)}</pre>`);
+                    } else {
+                        db.get('preorders')
+                          .find({ id: preorder.id })
+                          .assign({
+                              status: 'retrying',
+                              needsTrx: false, // reset flag setelah trx dikirim
+                              keterangan: JSON.stringify(trxRes),
+                              updated_at: new Date().toISOString()
+                          })
+                          .write();
+                          
+                        broadcastToAdmins(bot, `✅ <b>TRANSAKSI TERKIRIM</b> ✅\n\nID: <code>${preorder.id}</code>\nResponse:\n<pre>${JSON.stringify(trxRes, null, 2)}</pre>\n\nStatus diubah/tetap <b>retrying</b> untuk memantau history.`);
+                    }
 
                 } catch (error) {
                     logger.error(`Trx failed for ${preorder.id}`, error.message);
@@ -89,13 +112,14 @@ async function checkAndProcess(bot) {
                     db.get('preorders')
                       .find({ id: preorder.id })
                       .assign({
-                          status: 'error',
+                          status: 'retrying', // jangan di set 'error' mati, biar auto-retry jalan
+                          needsTrx: true,
                           keterangan: error.message,
                           updated_at: new Date().toISOString()
                       })
                       .write();
                       
-                    broadcastToAdmins(bot, `❌ <b>TRANSAKSI GAGAL/ERROR KONEKSI</b> ❌\n\nID: <code>${preorder.id}</code>\nError: ${error.message}\n\nMasuk ke status <b>error</b>. Harap cek manual atau gunakan /edit untuk mengulang.`);
+                    broadcastToAdmins(bot, `❌ <b>TRANSAKSI GAGAL/ERROR KONEKSI</b> ❌\n\nID: <code>${preorder.id}</code>\nError: ${error.message}\n\nStatus <b>retrying</b> (Auto-Retry).`);
                 }
             } else {
                 // Tambahkan log jika stok tidak cukup atau produk tidak ditemukan
