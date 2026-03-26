@@ -2,7 +2,7 @@
   "name": "akrab-auto",
   "version": "1.0.0",
   "description": "",
-  "main": "cek_status.js",
+  "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"

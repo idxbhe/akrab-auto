@@ -6,7 +6,10 @@ const adapter = new FileSync(path.join(__dirname, '..', 'db.json'));
 const db = low(adapter);
 
 // Set some defaults (required if your JSON file is empty)
-db.defaults({ preorders: [] })
+db.defaults({ 
+    preorders: [],
+    admin_chats: []
+})
   .write();
 
 module.exports = db;

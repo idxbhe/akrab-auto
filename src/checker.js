@@ -17,26 +17,37 @@ async function checkAndProcess(bot) {
                 
                 // Cek status berdasarkan respon Khfy
                 if (historyStr.includes('sukses') || historyStr.includes('success')) {
-                    db.get('preorders').find({ id: p.id }).assign({ status: 'succes', updated_at: new Date().toISOString() }).write();
+                    db.get('preorders')
+                      .find({ id: p.id })
+                      .assign({ 
+                          status: 'success', 
+                          updated_at: new Date().toISOString() 
+                      })
+                      .write();
+                      
                     broadcastToAdmins(bot, `🎉 <b>TRANSAKSI SUKSES</b> 🎉\n\nID: <code>${p.id}</code>\nNomor: ${p.nomor}\nPaket: ${p.nama_produk}`);
-                    p.status = 'succes'; // update lokal agar tidak diproses lanjut
                 } else if (historyStr.includes('gagal') || historyStr.includes('failed') || historyStr.includes('batal')) {
-                    // Transaksi gagal dari sisi server, kita akan retry (menunggu stock)
-                    // Status tetap 'retrying', tapi kita beri flag agar bisa di eksekusi ulang
-                    p.needsTrx = true;
-                    broadcastToAdmins(bot, `⚠️ <b>TRANSAKSI GAGAL/BATAL DARI SERVER</b> ⚠️\n\nID: <code>${p.id}</code>\nStatus tetap <b>retrying</b> (akan diulang saat stok tersedia tanpa duplikasi)`);
-                } else {
-                    // Jika proses/pending atau status tidak dikenali, biarkan saja (jangan retry trx)
-                    p.isProcessing = true;
+                    // Transaksi gagal dari sisi server, set flag needsTrx di DB
+                    db.get('preorders')
+                      .find({ id: p.id })
+                      .assign({ 
+                          needsTrx: true,
+                          updated_at: new Date().toISOString()
+                      })
+                      .write();
+                      
+                    broadcastToAdmins(bot, `⚠️ <b>TRANSAKSI GAGAL/BATAL DARI SERVER</b> ⚠️\n\nID: <code>${p.id}</code>\nStatus tetap <b>retrying</b> (akan diulang saat stok tersedia)`);
                 }
             } catch (err) {
                  logger.error(`History check failed for ${p.id}`, err.message);
-                 p.isProcessing = true;
             }
         }
 
+        // Ambil data terbaru dari DB setelah update history
+        const updatedPreorders = db.get('preorders').value();
+
         // 2. Process stock and trx for 'pending' AND ('retrying' yang butuh re-trx)
-        const ordersToTrx = preorders.filter(p => 
+        const ordersToTrx = updatedPreorders.filter(p => 
             p.status === 'pending' || (p.status === 'retrying' && p.needsTrx)
         );
 
@@ -63,6 +74,7 @@ async function checkAndProcess(bot) {
                       .find({ id: preorder.id })
                       .assign({
                           status: 'retrying',
+                          needsTrx: false, // reset flag setelah trx dikirim
                           keterangan: JSON.stringify(trxRes),
                           updated_at: new Date().toISOString()
                       })
@@ -103,9 +115,13 @@ function broadcastToAdmins(bot, message) {
 
 function startChecker(bot, intervalMs = 10000) {
     logger.info(`Starting checker with interval ${intervalMs}ms`);
-    setInterval(() => {
-        checkAndProcess(bot);
-    }, intervalMs);
+    
+    async function run() {
+        await checkAndProcess(bot);
+        setTimeout(run, intervalMs);
+    }
+    
+    run();
 }
 
 module.exports = {

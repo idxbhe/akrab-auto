@@ -1,6 +1,7 @@
 const { Telegraf, Scenes, session, Markup } = require('telegraf');
 const db = require('./db');
 const logger = require('./logger');
+const api = require('./api');
 const dotenv = require('dotenv');
 dotenv.config();
 
@@ -320,12 +321,11 @@ bot.hears('💰 Cek Saldo', (ctx) => {
 
 bot.hears('📦 Cek Stok', async (ctx) => {
     try {
-        const api = require('./api');
         const stockRes = await api.cekStock();
         const stocks = stockRes.data;
         
         let msg = '📦 Stok saat ini:\n\n';
-        if (stocks && stocks.length > 0) {
+        if (stocks && Array.isArray(stocks) && stocks.length > 0) {
             PRODUCTS.forEach(p => {
                 const stockData = stocks.find(s => s.type === p.type);
                 const sisa = stockData ? stockData.sisa_slot : p.sisa_slot;

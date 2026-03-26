@@ -9,3 +9,21 @@
 [2026-03-25T14:33:56.384Z] [ERROR] Failed to start bot {"message":"request to https://api.telegram.org/bot8645851343:[REDACTED]/getMe failed, reason: ","type":"system","errno":"ETIMEDOUT","code":"ETIMEDOUT"}
 [2026-03-25T14:34:47.672Z] [INFO] Preorder added {"id":"1774449287665","nomor":"082313506815","kode_produk":"XLA14","nama_produk":"SuperMini","status":"pending","reff_id":"082313506815-XLA14-SuperMini-rjf5lb","trx_id":"","keterangan":"","created_at":"2026-03-25T14:34:47.665Z"}
 [2026-03-25T14:35:06.543Z] [INFO] Preorder deleted via inline button {"id":"1774449287665"}
+[2026-03-25T23:06:19.598Z] [INFO] Preorder added {"id":"1774479979585","nomor":"082313506815","kode_produk":"XLA39","nama_produk":"Big ","status":"pending","reff_id":"082313506815-XLA39-Big-dsuta3","trx_id":"","keterangan":"","created_at":"2026-03-25T23:06:19.585Z"}
+[2026-03-25T23:07:10.660Z] [INFO] Preorder added {"id":"1774480030658","nomor":"085750221112","kode_produk":"XLA65","nama_produk":"JUMBO","status":"pending","reff_id":"085750221112-XLA65-JUMBO-uhysua","trx_id":"","keterangan":"","created_at":"2026-03-25T23:07:10.658Z"}
+[2026-03-25T23:08:01.699Z] [INFO] Preorder edited {"id":"1774480030658","nomor":"085750221112","kode_produk":"XLA89"}
+[2026-03-25T23:09:31.320Z] [INFO] Preorder deleted via inline button {"id":"1774480030658"}
+[2026-03-25T23:09:35.006Z] [INFO] Preorder deleted via inline button {"id":"1774479979585"}
+[2026-03-26T10:21:10.744Z] [ERROR] Failed to get stock in bot {"error":"api is not defined"}
+[2026-03-26T10:21:23.579Z] [ERROR] Failed to get stock in bot {"error":"api is not defined"}
+[2026-03-26T10:21:52.018Z] [INFO] Preorder added {"id":"1774520512015","nomor":"083544768903","kode_produk":"XLA39","nama_produk":"Big ","status":"pending","reff_id":"083544768903-XLA39-Big-d6ldpq","trx_id":"","keterangan":"","created_at":"2026-03-26T10:21:52.015Z"}
+[2026-03-26T10:22:11.573Z] [INFO] Preorder added {"id":"1774520531571","nomor":"087765890765","kode_produk":"XLA89","nama_produk":"MegaBig","status":"pending","reff_id":"087765890765-XLA89-MegaBig-wxkprn","trx_id":"","keterangan":"","created_at":"2026-03-26T10:22:11.571Z"}
+[2026-03-26T10:23:00.665Z] [ERROR] Failed to get stock in bot {"error":"api is not defined"}
+[2026-03-26T14:26:12.990Z] [INFO] Starting checker with interval 10000ms
+[2026-03-26T14:26:13.207Z] [INFO] Stock found for XLA51. Executing trx... {"id":"123456789","nomor":"081234567890","kode_produk":"XLA51","nama_produk":"Jumbo V2","status":"pending","reff_id":"081234567890-XLA51-JumboV2-abcdef","trx_id":"","keterangan":"","created_at":"2026-03-26T14:09:59.127Z"}
+[2026-03-26T14:26:13.257Z] [ERROR] Failed to do transaksi {"message":"Request failed with status code 500","produk":"XLA51","tujuan":"081234567890","reff_id":"081234567890-XLA51-JumboV2-abcdef"}
+[2026-03-26T14:26:13.588Z] [ERROR] Trx failed for 123456789 Request failed with status code 500
+[2026-03-26T14:30:48.715Z] [ERROR] Failed to cek stock {"message":"getaddrinfo EAI_AGAIN panel.khfy-store.com"}
+[2026-03-26T14:30:48.716Z] [ERROR] Checker error getaddrinfo EAI_AGAIN panel.khfy-store.com
+[2026-03-26T14:47:56.505Z] [ERROR] Failed to cek stock {"message":"getaddrinfo EAI_AGAIN panel.khfy-store.com"}
+[2026-03-26T14:47:56.505Z] [ERROR] Checker error getaddrinfo EAI_AGAIN panel.khfy-store.com
