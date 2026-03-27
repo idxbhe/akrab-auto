@@ -27,9 +27,9 @@ const mainMenu = Markup.keyboard([
 const addPreorderWizard = new Scenes.WizardScene(
     'add-preorder',
     (ctx) => {
-        ctx.reply('📱 Masukkan nomor tujuan:\n\n(Atau klik tombol di bawah untuk membatalkan)', Markup.inlineKeyboard([
+        ctx.reply('<b>Masukkan nomor tujuan:</b>', { parse_mode: 'HTML', ...Markup.inlineKeyboard([
             Markup.button.callback('❌ Batal', 'cancel')
-        ]));
+        ])});
         return ctx.wizard.next();
     },
     (ctx) => {
@@ -51,14 +51,14 @@ const addPreorderWizard = new Scenes.WizardScene(
         
         ctx.wizard.state.nomor = ctx.message.text;
         
-        const buttons = PRODUCTS.map(p => Markup.button.callback(`📦 ${p.nama} (${p.type})`, `select_${p.type}`));
+        const buttons = PRODUCTS.map(p => Markup.button.callback(`${p.nama} (${p.type})`, `select_${p.type}`));
         const keyboardOptions = [];
         for (let i = 0; i < buttons.length; i += 2) {
             keyboardOptions.push(buttons.slice(i, i + 2));
         }
         keyboardOptions.push([Markup.button.callback('❌ Batal', 'cancel')]);
         
-        ctx.reply('📦 Pilih paket Akrab:', Markup.inlineKeyboard(keyboardOptions));
+        ctx.reply('<b>Pilih paket Akrab:</b>', { parse_mode: 'HTML', ...Markup.inlineKeyboard(keyboardOptions)});
         return ctx.wizard.next();
     },
     (ctx) => {
@@ -96,7 +96,7 @@ const addPreorderWizard = new Scenes.WizardScene(
             
             db.get('preorders').push(newPreorder).write();
             
-            ctx.reply(`✅ Pre-order berhasil ditambahkan!\n\n📱 Nomor: ${nomor}\n📦 Paket: ${product.nama}\n🔖 Reff ID: ${reff_id}`, mainMenu);
+            ctx.reply(`✅ Pre-order berhasil ditambahkan!\n\n\`ID     :\` \`${newPreorder.id}\`\n\`Nomor  :\` \`${nomor}\`\n\`Paket  :\` \`${product.nama}\` (\`${product.type}\`)`, { parse_mode: 'Markdown', ...mainMenu });
             logger.info('Preorder added', newPreorder);
             ctx.answerCbQuery();
             return ctx.scene.leave();
@@ -151,14 +151,14 @@ const editPreorderWizard = new Scenes.WizardScene(
                 return ctx.scene.leave();
             }
             ctx.wizard.state.editId = id;
-            ctx.reply(`✏️ Edit Pre-order ID: ${id}\n📱 Nomor lama: ${exists.nomor}\n\n<b>Masukkan nomor tujuan baru:</b>`, { parse_mode: 'HTML', ...Markup.inlineKeyboard([
+            ctx.reply(`✏️ Edit Pre-order ID: ${id}\nNomor lama: ${exists.nomor}\n\n<b>Masukkan nomor tujuan baru:</b>`, { parse_mode: 'HTML', ...Markup.inlineKeyboard([
                 Markup.button.callback('❌ Batal', 'cancel')
             ])});
             ctx.wizard.selectStep(2);
             return;
         }
 
-        ctx.reply('✏️ Masukkan ID pre-order yang ingin diedit:\n\n(Atau klik tombol di bawah untuk membatalkan)', Markup.inlineKeyboard([
+        ctx.reply('✏️ Masukkan ID pre-order yang ingin diedit:', Markup.inlineKeyboard([
             Markup.button.callback('❌ Batal', 'cancel')
         ]));
         return ctx.wizard.next();
@@ -185,9 +185,9 @@ const editPreorderWizard = new Scenes.WizardScene(
         }
         
         ctx.wizard.state.editId = id;
-        ctx.reply(`✅ Pre-order ditemukan.\n📱 Nomor lama: ${exists.nomor}\n\nMasukkan nomor tujuan baru:\n(Atau klik tombol di bawah untuk membatalkan)`, Markup.inlineKeyboard([
+        ctx.reply(`✅ Pre-order ditemukan.\nNomor lama: ${exists.nomor}\n\n<b>Masukkan nomor tujuan baru:</b>`, { parse_mode: 'HTML', ...Markup.inlineKeyboard([
             Markup.button.callback('❌ Batal', 'cancel')
-        ]));
+        ])});
         return ctx.wizard.next();
     },
     (ctx) => {
@@ -204,14 +204,14 @@ const editPreorderWizard = new Scenes.WizardScene(
         }
         ctx.wizard.state.nomor = ctx.message.text;
         
-        const buttons = PRODUCTS.map(p => Markup.button.callback(`📦 ${p.nama} (${p.type})`, `edit_select_${p.type}`));
+        const buttons = PRODUCTS.map(p => Markup.button.callback(`${p.nama} (${p.type})`, `edit_select_${p.type}`));
         const keyboardOptions = [];
         for (let i = 0; i < buttons.length; i += 2) {
             keyboardOptions.push(buttons.slice(i, i + 2));
         }
         keyboardOptions.push([Markup.button.callback('❌ Batal', 'cancel')]);
         
-        ctx.reply('📦 Pilih paket Akrab baru:', Markup.inlineKeyboard(keyboardOptions));
+        ctx.reply('<b>Pilih paket Akrab baru:</b>', { parse_mode: 'HTML', ...Markup.inlineKeyboard(keyboardOptions)});
         return ctx.wizard.next();
     },
     (ctx) => {
@@ -248,7 +248,7 @@ const editPreorderWizard = new Scenes.WizardScene(
               })
               .write();
               
-            ctx.reply(`✅ Pre-order ID ${id} berhasil diupdate.\n\n📱 Nomor: ${nomor}\n📦 Paket: ${product.nama}\n🔖 Reff ID Baru: ${newReffId}`, mainMenu);
+            ctx.reply(`✅ Pre-order ID ${id} berhasil diupdate.\n\n\`ID     :\` \`${id}\`\n\`Nomor  :\` \`${nomor}\`\n\`Paket  :\` \`${product.nama}\` (\`${product.type}\`)`, { parse_mode: 'Markdown', ...mainMenu });
             logger.info('Preorder edited', { id, nomor, kode_produk: product.type });
             ctx.answerCbQuery();
             return ctx.scene.leave();
@@ -305,7 +305,7 @@ bot.hears('📋 List', async (ctx) => {
     ctx.reply('📋 Daftar Pre-Order:', mainMenu);
     
     for (const p of preorders) {
-        const msg = `🆔 ID: ${p.id}\n📱 Nomor: ${p.nomor}\n📦 Paket: ${p.nama_produk} (${p.kode_produk})`;
+        const msg = `\`ID     :\` \`${p.id}\`\n\`Nomor  :\` \`${p.nomor}\`\n\`Paket  :\` \`${p.nama_produk}\` (\`${p.kode_produk}\`)`;
         const buttons = Markup.inlineKeyboard([
             [
                 Markup.button.callback('🔍 Detail', `detail_${p.id}`),
@@ -316,7 +316,7 @@ bot.hears('📋 List', async (ctx) => {
                 Markup.button.callback('🗑️ Hapus', `deletebtn_${p.id}`)
             ]
         ]);
-        await ctx.reply(msg, buttons);
+        await ctx.reply(msg, { parse_mode: 'Markdown', ...buttons });
     }
 });
 
@@ -354,16 +354,16 @@ bot.action(/detail_(.+)/, async (ctx) => {
     }
     
     let msg = `🔍 Detail Pre-Order:\n\n`;
-    msg += `🆔 ID: ${p.id}\n`;
-    msg += `📱 Nomor: ${p.nomor}\n`;
-    msg += `📦 Paket: ${p.nama_produk} (${p.kode_produk})\n`;
-    msg += `⏳ Status: ${p.status}\n`;
-    msg += `🔖 Reff ID: ${p.reff_id}\n`;
-    msg += `📝 Keterangan: ${p.keterangan || '-'}\n`;
-    msg += `📅 Dibuat: ${p.created_at}`;
+    msg += `\`ID     :\` \`${p.id}\`\n`;
+    msg += `\`Nomor  :\` \`${p.nomor}\`\n`;
+    msg += `\`Paket  :\` \`${p.nama_produk}\` (\`${p.kode_produk}\`)\n`;
+    msg += `\`Status :\` \`${p.status}\`\n`;
+    msg += `\`Reff ID:\` \`${p.reff_id}\`\n`;
+    msg += `\`Ket.   :\` \`${p.keterangan || '-'}\`\n`;
+    msg += `\`Dibuat :\` \`${p.created_at}\``;
     
     await ctx.answerCbQuery();
-    await ctx.reply(msg);
+    await ctx.reply(msg, { parse_mode: 'Markdown' });
 });
 
 bot.action(/transac_(.+)/, async (ctx) => {
@@ -401,7 +401,7 @@ bot.action(/transac_(.+)/, async (ctx) => {
             db.get('preorders')
               .find({ id: p.id })
               .assign({
-                  status: 'retrying',
+                  status: 'manual_retrying',
                   needsTrx: false,
                   keterangan: 'Manual: ' + JSON.stringify(trxRes),
                   updated_at: new Date().toISOString()
@@ -413,7 +413,7 @@ bot.action(/transac_(.+)/, async (ctx) => {
             msg += `📱 Nomor: <code>${p.nomor}</code>\n`;
             msg += `📦 Paket: ${p.nama_produk} (${p.kode_produk})\n`;
             msg += `🔖 Reff ID: <code>${p.reff_id}</code>\n\n`;
-            msg += `Response:\n<pre>${JSON.stringify(trxRes, null, 2)}</pre>\n\nStatus diubah ke <b>retrying</b>.`;
+            msg += `Response:\n<pre>${JSON.stringify(trxRes, null, 2)}</pre>\n\nStatus diubah ke <b>manual_retrying</b>.`;
             
             await ctx.reply(msg, { parse_mode: 'HTML' });
         }

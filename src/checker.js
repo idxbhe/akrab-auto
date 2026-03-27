@@ -7,7 +7,7 @@ async function checkAndProcess(bot) {
         const preorders = db.get('preorders').value();
         
         // 1. Process history for 'retrying' orders
-        const retryingOrders = preorders.filter(p => p.status === 'retrying');
+        const retryingOrders = preorders.filter(p => p.status === 'retrying' || p.status === 'manual_retrying');
         for (const p of retryingOrders) {
             if (p.needsTrx) continue; // Skip history check if it's already queued for retry
             try {
@@ -16,6 +16,7 @@ async function checkAndProcess(bot) {
                 
                 const historyStr = JSON.stringify(historyRes).toLowerCase();
                 const isFailed = historyStr.includes('gagal') || historyStr.includes('failed') || historyStr.includes('batal') || historyStr.includes('tidak ditemukan') || historyStr.includes('"ok":false') || historyStr.includes('"status":false');
+                const isManual = p.status === 'manual_retrying';
                 
                 // Cek status berdasarkan respon Khfy
                 if (historyStr.includes('sukses') || historyStr.includes('success')) {
@@ -29,23 +30,29 @@ async function checkAndProcess(bot) {
                       
                     broadcastToAdmins(bot, `🎉 <b>TRANSAKSI SUKSES</b> 🎉\n\nID: <code>${p.id}</code>\nNomor: ${p.nomor}\nPaket: ${p.nama_produk}`);
                 } else if (isFailed) {
-                    // Transaksi gagal dari sisi server, set flag needsTrx di DB
+                    // Transaksi gagal dari sisi server
                     db.get('preorders')
                       .find({ id: p.id })
                       .assign({ 
-                          needsTrx: true,
+                          needsTrx: !isManual,
+                          status: isManual ? 'error' : 'retrying',
                           updated_at: new Date().toISOString()
                       })
                       .write();
                       
-                    broadcastToAdmins(bot, `⚠️ <b>TRANSAKSI GAGAL/BATAL/TIDAK DITEMUKAN</b> ⚠️\n\nID: <code>${p.id}</code>\nStatus dikembalikan ke <b>retrying (needsTrx)</b>`);
+                    broadcastToAdmins(bot, `⚠️ <b>TRANSAKSI GAGAL/BATAL/TIDAK DITEMUKAN</b> ⚠️\n\nID: <code>${p.id}</code>\nStatus diubah ke <b>${isManual ? 'error' : 'retrying (needsTrx)'}</b>`);
                 }
             } catch (err) {
                  logger.error(`History check failed for ${p.id}`, err.message);
+                 const isManual = p.status === 'manual_retrying';
                  if (err.response && (err.response.status === 404 || err.response.status === 500)) {
-                     // Assume transaction not found or server error, allow retry
-                     db.get('preorders').find({ id: p.id }).assign({ needsTrx: true, updated_at: new Date().toISOString() }).write();
-                     broadcastToAdmins(bot, `⚠️ <b>HISTORY ERROR (AUTO-RETRY)</b> ⚠️\n\nID: <code>${p.id}</code>\nError: ${err.message}`);
+                     if (!isManual) {
+                         // Assume transaction not found or server error, allow retry
+                         db.get('preorders').find({ id: p.id }).assign({ needsTrx: true, updated_at: new Date().toISOString() }).write();
+                         broadcastToAdmins(bot, `⚠️ <b>HISTORY ERROR (AUTO-RETRY)</b> ⚠️\n\nID: <code>${p.id}</code>\nError: ${err.message}`);
+                     } else {
+                         broadcastToAdmins(bot, `⚠️ <b>HISTORY ERROR (MANUAL)</b> ⚠️\n\nID: <code>${p.id}</code>\nError: ${err.message}\nTidak akan di-retry otomatis.`);
+                     }
                  }
             }
         }
