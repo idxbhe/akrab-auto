@@ -1,5 +1,5 @@
 const { Telegraf, Scenes, session, Markup } = require('telegraf');
-const db = require('./db');
+const { db, historyDb } = require('./db');
 const logger = require('./logger');
 const api = require('./api');
 const dotenv = require('dotenv');
@@ -21,7 +21,7 @@ function generateReffId(nomor, kode_produk, nama_produk) {
 
 const mainMenu = Markup.keyboard([
     ['➕ Tambah', '📋 List'],
-    ['💰 Cek Saldo', '📦 Cek Stok']
+    ['📜 History', '📦 Cek Stok']
 ]).resize();
 
 const addPreorderWizard = new Scenes.WizardScene(
@@ -87,7 +87,7 @@ const addPreorderWizard = new Scenes.WizardScene(
                 nomor: nomor,
                 kode_produk: product.type,
                 nama_produk: product.nama,
-                status: 'pending',
+                status: 'UNPROCESSED',
                 reff_id: reff_id,
                 trx_id: '',
                 keterangan: '',
@@ -96,7 +96,7 @@ const addPreorderWizard = new Scenes.WizardScene(
             
             db.get('preorders').push(newPreorder).write();
             
-            ctx.reply(`✅ Pre-order berhasil ditambahkan!\n\n\`ID     :\` \`${newPreorder.id}\`\n\`Nomor  :\` \`${nomor}\`\n\`Paket  :\` \`${product.nama}\` (\`${product.type}\`)`, { parse_mode: 'Markdown', ...mainMenu });
+            ctx.reply(`✅ Pre-order berhasil ditambahkan!\n\n\`Nomor  :\` \`${nomor}\`\n\`Paket  :\` \`${product.nama}\` (\`${product.type}\`)\n\`Status :\` \`UNPROCESSED\``, { parse_mode: 'Markdown', ...mainMenu });
             logger.info('Preorder added', newPreorder);
             ctx.answerCbQuery();
             return ctx.scene.leave();
@@ -134,7 +134,7 @@ const deletePreorderWizard = new Scenes.WizardScene(
         }
         
         db.get('preorders').remove({ id }).write();
-        ctx.reply(`✅ Pre-order ID ${id} berhasil dihapus.`, mainMenu);
+        ctx.reply(`✅ Pre-order berhasil dihapus.`, mainMenu);
         logger.info('Preorder deleted', { id });
         return ctx.scene.leave();
     }
@@ -151,7 +151,7 @@ const editPreorderWizard = new Scenes.WizardScene(
                 return ctx.scene.leave();
             }
             ctx.wizard.state.editId = id;
-            ctx.reply(`✏️ Edit Pre-order ID: ${id}\nNomor lama: ${exists.nomor}\n\n<b>Masukkan nomor tujuan baru:</b>`, { parse_mode: 'HTML', ...Markup.inlineKeyboard([
+            ctx.reply(`✏️ Edit Pre-order\nNomor lama: ${exists.nomor}\n\n<b>Masukkan nomor tujuan baru:</b>`, { parse_mode: 'HTML', ...Markup.inlineKeyboard([
                 Markup.button.callback('❌ Batal', 'cancel')
             ])});
             ctx.wizard.selectStep(2);
@@ -243,12 +243,12 @@ const editPreorderWizard = new Scenes.WizardScene(
                   kode_produk: product.type,
                   nama_produk: product.nama,
                   reff_id: newReffId,
-                  status: 'pending', // reset status
+                  status: 'UNPROCESSED', // reset status
                   keterangan: 'Edited'
               })
               .write();
               
-            ctx.reply(`✅ Pre-order ID ${id} berhasil diupdate.\n\n\`ID     :\` \`${id}\`\n\`Nomor  :\` \`${nomor}\`\n\`Paket  :\` \`${product.nama}\` (\`${product.type}\`)`, { parse_mode: 'Markdown', ...mainMenu });
+            ctx.reply(`✅ Pre-order berhasil diupdate.\n\n\`Nomor  :\` \`${nomor}\`\n\`Paket  :\` \`${product.nama}\` (\`${product.type}\`)\n\`Status :\` \`UNPROCESSED\``, { parse_mode: 'Markdown', ...mainMenu });
             logger.info('Preorder edited', { id, nomor, kode_produk: product.type });
             ctx.answerCbQuery();
             return ctx.scene.leave();
@@ -265,10 +265,10 @@ bot.use(stage.middleware());
 
 // Security middleware
 bot.use((ctx, next) => {
-    // We allow callback queries to pass if we can verify the user, 
-    // but ctx.from is usually available in callbackQuery as well.
     const username = ctx.from?.username?.toLowerCase();
-    if (username === 'kingbhe' || username === 'umams1') {
+    const allowedAdmins = (process.env.AUTHORIZED_USERS || 'kingbhe,umams1').toLowerCase().split(',').map(u => u.trim());
+    
+    if (allowedAdmins.includes(username)) {
         const chatId = ctx.chat?.id;
         if (chatId) {
             let adminChats = db.get('admin_chats').value() || [];
@@ -281,7 +281,6 @@ bot.use((ctx, next) => {
     }
     logger.warn('Unauthorized access attempt', { user: ctx.from });
     
-    // Check if it's a callback query to avoid error
     if (ctx.callbackQuery) {
         return ctx.answerCbQuery('❌ Anda tidak memiliki akses.', { show_alert: true });
     }
@@ -305,23 +304,41 @@ bot.hears('📋 List', async (ctx) => {
     ctx.reply('📋 Daftar Pre-Order:', mainMenu);
     
     for (const p of preorders) {
-        const msg = `\`ID     :\` \`${p.id}\`\n\`Nomor  :\` \`${p.nomor}\`\n\`Paket  :\` \`${p.nama_produk}\` (\`${p.kode_produk}\`)`;
-        const buttons = Markup.inlineKeyboard([
-            [
-                Markup.button.callback('🔍 Detail', `detail_${p.id}`),
-                Markup.button.callback('🚀 Transac', `transac_${p.id}`)
-            ],
-            [
-                Markup.button.callback('✏️ Edit', `editbtn_${p.id}`),
-                Markup.button.callback('🗑️ Hapus', `deletebtn_${p.id}`)
-            ]
-        ]);
+        const msg = `\`Nomor  :\` \`${p.nomor}\`\n\`Paket  :\` \`${p.nama_produk}\` (\`${p.kode_produk}\`)\n\`Status :\` \`${p.status}\``;
+        
+        const row1 = [
+            Markup.button.callback('🔍 Detail', `detail_${p.id}`),
+            Markup.button.callback('🚀 EXEC (manual)', `execmanual_${p.id}`)
+        ];
+        const row2 = [
+            Markup.button.callback('✏️ Edit', `editbtn_${p.id}`),
+            Markup.button.callback('🗑️ Hapus', `deletebtn_${p.id}`)
+        ];
+        const row3 = [
+            Markup.button.callback('🔄 Cek', `cekbtn_${p.id}`)
+        ];
+
+        if (p.status === 'ERROR') {
+            row3.push(Markup.button.callback('♻️ Retry', `retrybtn_${p.id}`));
+        }
+
+        const buttons = Markup.inlineKeyboard([row1, row2, row3]);
         await ctx.reply(msg, { parse_mode: 'Markdown', ...buttons });
     }
 });
 
-bot.hears('💰 Cek Saldo', (ctx) => {
-    ctx.reply('💰 Saldo Anda saat ini: Rp 0\n\n*(Fitur dalam pengembangan)*', { parse_mode: 'Markdown', ...mainMenu });
+bot.hears('📜 History', async (ctx) => {
+    const history = historyDb.get('history').orderBy(['updated_at'], ['desc']).take(5).value();
+    if (!history || history.length === 0) {
+        return ctx.reply('📜 History kosong.', mainMenu);
+    }
+
+    let msg = '📜 **5 History Terakhir (SUCCESS):**\n\n';
+    history.forEach((p, i) => {
+        msg += `${i+1}. \`${p.nomor}\` - ${p.nama_produk}\n   📅 ${p.updated_at}\n\n`;
+    });
+
+    ctx.reply(msg, { parse_mode: 'Markdown', ...mainMenu });
 });
 
 bot.hears('📦 Cek Stok', async (ctx) => {
@@ -366,72 +383,88 @@ bot.action(/detail_(.+)/, async (ctx) => {
     await ctx.reply(msg, { parse_mode: 'Markdown' });
 });
 
-bot.action(/transac_(.+)/, async (ctx) => {
+bot.action(/execmanual_(.+)/, async (ctx) => {
     const id = ctx.match[1];
     const p = db.get('preorders').find({ id }).value();
     if (!p) {
         return ctx.answerCbQuery('❌ Pre-order tidak ditemukan.', { show_alert: true });
     }
     
-    await ctx.answerCbQuery('Mengeksekusi transaksi manual...', { show_alert: false });
+    await ctx.answerCbQuery('Mengecek stok...', { show_alert: false });
     
     try {
+        const stockRes = await api.cekStock();
+        const stocks = stockRes.data;
+        const productStock = stocks.find(s => s.type === p.kode_produk);
+        const sisaSlot = productStock ? parseInt(productStock.sisa_slot, 10) : 0;
+
+        if (sisaSlot <= 0) {
+            return ctx.reply(`❌ Stok tidak tersedia untuk ${p.nama_produk}. Status tetap ${p.status}.`);
+        }
+
+        await ctx.reply(`🚀 Mengeksekusi transaksi manual untuk ${p.nomor}...`);
+
         const trxRes = await api.doTransaksi(p.kode_produk, p.nomor, p.reff_id);
         logger.info(`Manual Trx result for ${p.id}`, trxRes);
         
-        const isFailedTrx = !trxRes || trxRes.ok === false || trxRes.status === false || (trxRes.message && trxRes.message.toLowerCase().includes('gagal'));
+        db.get('preorders')
+            .find({ id: p.id })
+            .assign({
+                status: 'EXECUTED',
+                keterangan: 'Manual: ' + JSON.stringify(trxRes),
+                updated_at: new Date().toISOString()
+            })
+            .write();
+        
+        ctx.reply(`✅ Transaksi manual terkirim. Status diubah ke **EXECUTED**. Menunggu webhook...`, { parse_mode: 'Markdown' });
 
-        if (isFailedTrx) {
-            db.get('preorders')
-              .find({ id: p.id })
-              .assign({
-                  status: 'error',
-                  needsTrx: false,
-                  keterangan: 'Manual Failed: ' + JSON.stringify(trxRes),
-                  updated_at: new Date().toISOString()
-              })
-              .write();
-              
-            let msg = `⚠️ <b>TRANSAKSI MANUAL DITOLAK SERVER</b> ⚠️\n\n`;
-            msg += `🆔 ID: <code>${p.id}</code>\n`;
-            msg += `Response:\n<pre>${JSON.stringify(trxRes, null, 2)}</pre>\n\nStatus diubah ke <b>error</b>.`;
-            
-            await ctx.reply(msg, { parse_mode: 'HTML' });
-        } else {
-            db.get('preorders')
-              .find({ id: p.id })
-              .assign({
-                  status: 'manual_retrying',
-                  needsTrx: false,
-                  keterangan: 'Manual: ' + JSON.stringify(trxRes),
-                  updated_at: new Date().toISOString()
-              })
-              .write();
-              
-            let msg = `✅ <b>TRANSAKSI MANUAL TERKIRIM</b> ✅\n\n`;
-            msg += `🆔 ID: <code>${p.id}</code>\n`;
-            msg += `📱 Nomor: <code>${p.nomor}</code>\n`;
-            msg += `📦 Paket: ${p.nama_produk} (${p.kode_produk})\n`;
-            msg += `🔖 Reff ID: <code>${p.reff_id}</code>\n\n`;
-            msg += `Response:\n<pre>${JSON.stringify(trxRes, null, 2)}</pre>\n\nStatus diubah ke <b>manual_retrying</b>.`;
-            
-            await ctx.reply(msg, { parse_mode: 'HTML' });
-        }
     } catch (error) {
         logger.error(`Manual Trx failed for ${p.id}`, error.message);
-        
-        db.get('preorders')
-          .find({ id: p.id })
-          .assign({
-              status: 'error',
-              needsTrx: false,
-              keterangan: 'Manual Error: ' + error.message,
-              updated_at: new Date().toISOString()
-          })
-          .write();
-          
-        await ctx.reply(`❌ <b>TRANSAKSI MANUAL GAGAL/ERROR</b> ❌\n\nID: <code>${p.id}</code>\nError: ${error.message}\n\nStatus <b>error</b>.`, { parse_mode: 'HTML' });
+        ctx.reply(`❌ Transaksi manual gagal: ${error.message}`);
     }
+});
+
+bot.action(/cekbtn_(.+)/, async (ctx) => {
+    const id = ctx.match[1];
+    const p = db.get('preorders').find({ id }).value();
+    if (!p) {
+        return ctx.answerCbQuery('❌ Pre-order tidak ditemukan.', { show_alert: true });
+    }
+
+    if (p.status === 'UNPROCESSED') {
+        return ctx.answerCbQuery('Status masih UNPROCESSED. Belum ada transaksi di server.', { show_alert: true });
+    }
+
+    await ctx.answerCbQuery('Mengecek history di server...', { show_alert: false });
+
+    try {
+        const historyRes = await api.cekHistory(p.reff_id);
+        ctx.reply(`🔍 Response Server untuk ${p.reff_id}:\n\n<pre>${JSON.stringify(historyRes, null, 2)}</pre>`, { parse_mode: 'HTML' });
+    } catch (error) {
+        ctx.reply(`❌ Gagal mengecek history: ${error.message}`);
+    }
+});
+
+bot.action(/retrybtn_(.+)/, async (ctx) => {
+    const id = ctx.match[1];
+    const p = db.get('preorders').find({ id }).value();
+    if (!p) {
+        return ctx.answerCbQuery('❌ Pre-order tidak ditemukan.', { show_alert: true });
+    }
+
+    const newReffId = generateReffId(p.nomor, p.kode_produk, p.nama_produk);
+    db.get('preorders')
+        .find({ id: p.id })
+        .assign({
+            reff_id: newReffId,
+            status: 'UNPROCESSED',
+            keterangan: 'Retried manually',
+            updated_at: new Date().toISOString()
+        })
+        .write();
+
+    await ctx.answerCbQuery('🔄 Order di-reset ke UNPROCESSED dengan Reff ID baru.', { show_alert: true });
+    ctx.reply(`🔄 Order \`${p.nomor}\` di-reset ke **UNPROCESSED**.\nReff ID baru: \`${newReffId}\``, { parse_mode: 'Markdown' });
 });
 
 bot.action(/editbtn_(.+)/, async (ctx) => {
@@ -459,8 +492,8 @@ bot.action(/deletebtn_(.+)/, async (ctx) => {
 
 bot.command('tambah', (ctx) => ctx.scene.enter('add-preorder'));
 bot.command('list', (ctx) => bot.handleUpdate({ ...ctx.update, message: { text: '📋 List' } }));
-// We still keep the command text for manual entry or if users type it
 bot.command('hapus', (ctx) => ctx.scene.enter('delete-preorder'));
 bot.command('edit', (ctx) => ctx.scene.enter('edit-preorder'));
+bot.command('history', (ctx) => bot.handleUpdate({ ...ctx.update, message: { text: '📜 History' } }));
 
 module.exports = bot;

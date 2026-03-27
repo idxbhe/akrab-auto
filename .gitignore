@@ -8,3 +8,4 @@ plan.md
 bot.log
 .testenv
 msg.txt
+history.db
