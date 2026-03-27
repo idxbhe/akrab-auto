@@ -64,9 +64,13 @@ async function checkAndProcess(bot) {
         } else if (stockRes && Array.isArray(stockRes.data)) {
             stocks = stockRes.data;
         } else {
-            logger.warn('Failed to parse stock from server, invalid format');
+            logger.warn('Failed to parse stock from server, invalid format', stockRes);
             return;
         }
+
+        logger.info(`Stok terdeteksi: ${stocks.length} item.`);
+        // Optional: log specific stock details if needed
+        // logger.debug('Detail stok:', stocks);
 
         for (const preorder of ordersToTrx) {
             const productStock = stocks.find(s => s.type === preorder.kode_produk || s.kode_produk === preorder.kode_produk);

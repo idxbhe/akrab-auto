@@ -268,6 +268,12 @@ bot.use((ctx, next) => {
     const username = ctx.from?.username?.toLowerCase();
     const allowedAdmins = (process.env.AUTHORIZED_USERS || 'kingbhe,umams1').toLowerCase().split(',').map(u => u.trim());
     
+    if (ctx.message && ctx.message.text) {
+        logger.info(`Text message from ${ctx.from?.username || 'unknown'}: ${ctx.message.text}`);
+    } else if (ctx.callbackQuery) {
+        logger.info(`Callback query from ${ctx.from?.username || 'unknown'}: ${ctx.callbackQuery.data}`);
+    }
+
     if (allowedAdmins.includes(username)) {
         const chatId = ctx.chat?.id;
         if (chatId) {
@@ -385,6 +391,7 @@ bot.action(/detail_(.+)/, async (ctx) => {
 
 bot.action(/execmanual_(.+)/, async (ctx) => {
     const id = ctx.match[1];
+    logger.info(`User ${ctx.from.username} clicked EXEC (manual) for ID ${id}`);
     const p = db.get('preorders').find({ id }).value();
     if (!p) {
         return ctx.answerCbQuery('❌ Pre-order tidak ditemukan.', { show_alert: true });
