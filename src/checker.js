@@ -2,12 +2,31 @@ const api = require('./api');
 const { db, historyDb } = require('./db');
 const logger = require('./logger');
 
+function startChecker(bot, intervalMs = 10000) {
+    logger.info(`Checker started with interval: ${intervalMs}ms`);
+    
+    async function run() {
+        try {
+            logger.info('--- MEMULAI SIKLUS PENGECEKAN STOK ---');
+            await checkAndProcess(bot);
+        } catch (err) {
+            logger.error('Checker CRITICAL error in run():', err.message);
+        } finally {
+            logger.info(`Siklus selesai. Cek selanjutnya dalam ${intervalMs / 1000} detik...`);
+            setTimeout(run, intervalMs);
+        }
+    }
+    
+    run();
+}
+
 async function checkAndProcess(bot) {
-    try {
-        const preorders = db.get('preorders').value() || [];
-        
-        // 1. Cek status order yang EXECUTED menggunakan /history
-        const executedOrders = preorders.filter(p => p.status === 'EXECUTED');
+    const preorders = db.get('preorders').value() || [];
+    
+    // 1. Cek status order yang EXECUTED menggunakan /history
+    const executedOrders = preorders.filter(p => p.status === 'EXECUTED');
+    if (executedOrders.length > 0) {
+        logger.info(`Mengecek status untuk ${executedOrders.length} order EXECUTED...`);
         for (const order of executedOrders) {
             try {
                 const historyRes = await api.cekHistory(order.reff_id);
@@ -32,95 +51,98 @@ async function checkAndProcess(bot) {
                             })
                             .write();
                         
-                        logger.info(`Order ${order.id} status updated via checker to ${finalStatus}`);
-                        
-                        const notifyMsg = `🔔 <b>STATUS UPDATE (CHECKER)</b> 🔔\n\nID: <code>${order.id}</code>\nNomor: ${order.nomor}\nPaket: ${order.nama_produk}\nStatus: <b>${finalStatus}</b>\nKet: ${hData.keterangan || statusText}`;
-                        broadcastToAdmins(bot, notifyMsg);
+                        logger.info(`Order ${order.id} updated to ${finalStatus} via auto-history check`);
+                        broadcastToAdmins(bot, `🔔 <b>STATUS UPDATE (AUTO CHECK)</b> 🔔\n\nID: <code>${order.id}</code>\nNomor: ${order.nomor}\nPaket: ${order.nama_produk}\nStatus: <b>${finalStatus}</b>\nKet: ${hData.keterangan || statusText}`);
 
                         if (finalStatus === 'SUCCESS') {
                             const completedOrder = db.get('preorders').find({ id: order.id }).value();
                             historyDb.get('history').push(completedOrder).write();
                             db.get('preorders').remove({ id: order.id }).write();
-                            logger.info(`Order ${order.id} moved to history by checker`);
                         }
+                    } else {
+                        logger.info(`Order ${order.id} masih ${statusText} di server.`);
                     }
+                } else {
+                    logger.info(`Order ${order.id} belum ditemukan di history server.`);
                 }
             } catch (err) {
-                logger.error(`Failed to check history for EXECUTED order ${order.id}`, err.message);
+                logger.error(`Failed to check history for order ${order.id}: ${err.message}`);
             }
         }
+    }
 
-        // 2. Eksekusi transaksi untuk yang UNPROCESSED
-        // Get updated preorders after potential history moves
-        const currentPreorders = db.get('preorders').value() || [];
-        const ordersToTrx = currentPreorders.filter(p => p.status === 'UNPROCESSED' || p.status === 'pending');
+    // 2. Eksekusi transaksi untuk yang UNPROCESSED
+    const currentPreorders = db.get('preorders').value() || [];
+    const ordersToTrx = currentPreorders.filter(p => p.status === 'UNPROCESSED' || p.status === 'pending');
 
-        if (ordersToTrx.length === 0) return;
+    if (ordersToTrx.length === 0) {
+        logger.info('Tidak ada order UNPROCESSED/pending untuk dieksekusi.');
+        return;
+    }
 
-        const stockRes = await api.cekStock();
-        let stocks = [];
-        if (Array.isArray(stockRes)) {
-            stocks = stockRes;
-        } else if (stockRes && Array.isArray(stockRes.data)) {
-            stocks = stockRes.data;
-        } else {
-            logger.warn('Failed to parse stock from server, invalid format', stockRes);
-            return;
-        }
-
-        logger.info(`Stok terdeteksi: ${stocks.length} item.`);
-        // Optional: log specific stock details if needed
-        // logger.debug('Detail stok:', stocks);
-
-        for (const preorder of ordersToTrx) {
-            const productStock = stocks.find(s => s.type === preorder.kode_produk || s.kode_produk === preorder.kode_produk);
-            const sisaSlotStr = productStock ? (productStock.sisa_slot || productStock.stok || productStock.stock || 0) : 0;
-            const sisaSlot = parseInt(sisaSlotStr, 10);
-            
-            if (productStock && sisaSlot > 0) {
-                logger.info(`Stock found for ${preorder.kode_produk} (Slot: ${sisaSlot}). Executing trx...`, { id: preorder.id });
-                
-                broadcastToAdmins(bot, `🔔 <b>MEMULAI TRANSAKSI OTOMATIS</b> 🔔\n\nID: <code>${preorder.id}</code>\nNomor: <code>${preorder.nomor}</code>\nProduk: ${preorder.nama_produk} (${preorder.kode_produk})\nReff ID: <code>${preorder.reff_id}</code>\nSisa Slot: ${sisaSlot}`);
-
-                try {
-                    const trxRes = await api.doTransaksi(preorder.kode_produk, preorder.nomor, preorder.reff_id);
-                    logger.info(`Trx result for ${preorder.id}`, trxRes);
-                    
-                    const isFailedTrx = !trxRes || trxRes.ok === false || trxRes.status === false || (trxRes.message && trxRes.message.toLowerCase().includes('gagal'));
-
-                    if (isFailedTrx) {
-                        db.get('preorders')
-                          .find({ id: preorder.id })
-                          .assign({
-                              status: 'EXECUTED',
-                              keterangan: 'Initial Trx Response: ' + JSON.stringify(trxRes),
-                              updated_at: new Date().toISOString()
-                          })
-                          .write();
-                          
-                        broadcastToAdmins(bot, `⚠️ <b>TRANSAKSI TERKIRIM (RESPON NEGATIF)</b> ⚠️\n\nID: <code>${preorder.id}</code>\nResponse:\n<pre>${JSON.stringify(trxRes, null, 2)}</pre>`);
-                    } else {
-                        db.get('preorders')
-                          .find({ id: preorder.id })
-                          .assign({
-                              status: 'EXECUTED',
-                              keterangan: 'Initial Trx Response: ' + JSON.stringify(trxRes),
-                              updated_at: new Date().toISOString()
-                          })
-                          .write();
-                          
-                        broadcastToAdmins(bot, `🚀 <b>TRANSAKSI TEREKSEKUSI</b> 🚀\n\nID: <code>${preorder.id}</code>\nNomor: ${preorder.nomor}\nPaket: ${preorder.nama_produk}\nStatus: <b>EXECUTED</b>\n\nMenunggu update dari webhook / auto check...`);
-                    }
-
-                } catch (error) {
-                    logger.error(`Trx failed for ${preorder.id}`, error.message);
-                    broadcastToAdmins(bot, `❌ <b>KONEKSI GAGAL SAAT TRANSAKSI</b> ❌\n\nID: <code>${preorder.id}</code>\nError: ${error.message}\n\nStatus tetap <b>UNPROCESSED</b>.`);
-                }
-            }
-        }
-        
+    logger.info(`Ditemukan ${ordersToTrx.length} order UNPROCESSED. Mengambil stok...`);
+    let stockRes;
+    try {
+        stockRes = await api.cekStock();
     } catch (err) {
-        logger.error('Checker error', err.message);
+        logger.error('Gagal mengambil stok:', err.message);
+        return;
+    }
+
+    let stocks = [];
+    if (Array.isArray(stockRes)) {
+        stocks = stockRes;
+    } else if (stockRes && Array.isArray(stockRes.data)) {
+        stocks = stockRes.data;
+    } else {
+        logger.warn('Format stok tidak dikenali:', stockRes);
+        return;
+    }
+
+    logger.info(`Stok dari server: ${stocks.length} produk ditemukan.`);
+
+    for (const preorder of ordersToTrx) {
+        const productStock = stocks.find(s => 
+            (s.type && s.type.toUpperCase() === preorder.kode_produk.toUpperCase()) || 
+            (s.kode_produk && s.kode_produk.toUpperCase() === preorder.kode_produk.toUpperCase()) ||
+            (s.kode && s.kode.toUpperCase() === preorder.kode_produk.toUpperCase())
+        );
+
+        if (!productStock) {
+            logger.warn(`Produk ${preorder.kode_produk} tidak ditemukan di data stok server.`);
+            continue;
+        }
+
+        const sisaSlotStr = productStock.sisa_slot || productStock.stok || productStock.stock || productStock.sisa || 0;
+        const sisaSlot = parseInt(sisaSlotStr, 10);
+        
+        if (sisaSlot > 0) {
+            logger.info(`EKSEKUSI OTOMATIS: ${preorder.nomor} (${preorder.kode_produk}) - Slot: ${sisaSlot}`);
+            
+            broadcastToAdmins(bot, `🔔 <b>MEMULAI TRANSAKSI OTOMATIS</b> 🔔\n\nID: <code>${preorder.id}</code>\nNomor: <code>${preorder.nomor}</code>\nProduk: ${preorder.nama_produk} (${preorder.kode_produk})\nReff ID: <code>${preorder.reff_id}</code>\nSisa Slot: ${sisaSlot}`);
+
+            try {
+                const trxRes = await api.doTransaksi(preorder.kode_produk, preorder.nomor, preorder.reff_id);
+                logger.info(`Hasil Trx ${preorder.id}:`, trxRes);
+                
+                db.get('preorders')
+                  .find({ id: preorder.id })
+                  .assign({
+                      status: 'EXECUTED',
+                      keterangan: 'Auto: ' + (trxRes.msg || trxRes.message || JSON.stringify(trxRes)),
+                      updated_at: new Date().toISOString()
+                  })
+                  .write();
+                  
+                broadcastToAdmins(bot, `🚀 <b>TRANSAKSI TEREKSEKUSI</b> 🚀\n\nID: <code>${preorder.id}</code>\nNomor: ${preorder.nomor}\nStatus: <b>EXECUTED</b>\n\nMenunggu update selanjutnya...`);
+
+            } catch (error) {
+                logger.error(`Trx Gagal untuk ${preorder.id}:`, error.message);
+                broadcastToAdmins(bot, `❌ <b>KONEKSI GAGAL SAAT TRANSAKSI</b> ❌\n\nID: <code>${preorder.id}</code>\nError: ${error.message}\n\nStatus tetap <b>UNPROCESSED</b>.`);
+            }
+        } else {
+            logger.info(`Stok untuk ${preorder.kode_produk} kosong (0). Skip.`);
+        }
     }
 }
 
@@ -132,19 +154,6 @@ function broadcastToAdmins(bot, message) {
             logger.error(`Failed to send message to ${chatId}`, e.message);
         });
     }
-}
-
-function startChecker(bot, intervalMs = 10000) {
-    logger.info(`Starting checker with interval ${intervalMs}ms`);
-    
-    async function run() {
-        logger.info('Mengecek stok dan status order secara otomatis...');
-        await checkAndProcess(bot);
-        logger.info(`Cek selanjutnya dalam ${intervalMs / 1000} detik...`);
-        setTimeout(run, intervalMs);
-    }
-    
-    run();
 }
 
 module.exports = {

@@ -93,9 +93,12 @@ app.listen(PORT, () => {
     logger.info(`Webhook server listening on port ${PORT}`);
 });
 
+// Start checker immediately
+logger.info(`Memulai background checker dengan interval ${CHECK_INTERVAL}ms...`);
+startChecker(bot, CHECK_INTERVAL);
+
 bot.launch().then(() => {
     logger.info('Bot is running...');
-    startChecker(bot, CHECK_INTERVAL);
 }).catch(err => {
     logger.error('Failed to start bot', err);
 });
