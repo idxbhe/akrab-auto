@@ -91,7 +91,9 @@ const addPreorderWizard = new Scenes.WizardScene(
                 reff_id: reff_id,
                 trx_id: '',
                 keterangan: '',
-                created_at: new Date().toISOString()
+                created_at: new Date().toISOString(),
+                next_status_check: 0,
+                empty_check_count: 0
             };
             
             db.get('preorders').push(newPreorder).write();
@@ -244,7 +246,9 @@ const editPreorderWizard = new Scenes.WizardScene(
                   nama_produk: product.nama,
                   reff_id: newReffId,
                   status: 'UNPROCESSED', // reset status
-                  keterangan: 'Edited'
+                  keterangan: 'Edited',
+                  next_status_check: 0,
+                  empty_check_count: 0
               })
               .write();
               
@@ -425,8 +429,10 @@ bot.action(/execmanual_(.+)/, async (ctx) => {
             .find({ id: p.id })
             .assign({
                 status: 'EXECUTED',
-                keterangan: 'Manual: ' + JSON.stringify(trxRes),
-                updated_at: new Date().toISOString()
+                keterangan: 'Manual: ' + (trxRes.msg || trxRes.message || JSON.stringify(trxRes)),
+                updated_at: new Date().toISOString(),
+                next_status_check: Date.now() + 10000,
+                empty_check_count: 0
             })
             .write();
         
@@ -473,7 +479,9 @@ bot.action(/retrybtn_(.+)/, async (ctx) => {
             reff_id: newReffId,
             status: 'UNPROCESSED',
             keterangan: 'Retried manually',
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            next_status_check: 0,
+            empty_check_count: 0
         })
         .write();
 
