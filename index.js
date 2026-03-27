@@ -9,8 +9,8 @@ dotenv.config();
 const CHECK_INTERVAL = parseInt(process.env.CHECK_INTERVAL || '10000', 10);
 const PORT = process.env.PORT || 3300;
 
-// Webhook Regex from docs.html
-const RX = /RC=(?<reffid>[a-f0-9-]+)\s+TrxID=(?<trxid>\d+)\s+(?<produk>[A-Z0-9]+)\.(?<tujuan>\d+)\s+(?<status_text>[A-Za-z]+)\s*(?<keterangan>.+?)(?:\s+Saldo[\s\S]*?)?(?:\bresult=(?<status_code>\d+))?\s*>?$/i;
+// Webhook Regex updated to support alphanumeric Reff ID (not just hex)
+const RX = /RC=(?<reffid>[a-zA-Z0-9-]+)\s+TrxID=(?<trxid>\d+)\s+(?<produk>[A-Z0-9]+)\.(?<tujuan>\d+)\s+(?<status_text>[A-Za-z]+)\s*(?<keterangan>.+?)(?:\s+Saldo[\s\S]*?)?(?:\bresult=(?<status_code>\d+))?\s*>?$/i;
 
 const app = express();
 app.use(express.json());
