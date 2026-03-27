@@ -464,9 +464,3 @@ bot.command('hapus', (ctx) => ctx.scene.enter('delete-preorder'));
 bot.command('edit', (ctx) => ctx.scene.enter('edit-preorder'));
 
 module.exports = bot;
-t-preorder'));
-
-module.exports = bot;
-r'));
-
-module.exports = bot;
