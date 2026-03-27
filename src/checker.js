@@ -1,27 +1,77 @@
 const api = require('./api');
-const { db } = require('./db');
+const { db, historyDb } = require('./db');
 const logger = require('./logger');
 
 async function checkAndProcess(bot) {
     try {
-        const preorders = db.get('preorders').value();
+        const preorders = db.get('preorders').value() || [];
         
-        // Only process UNPROCESSED orders
-        const ordersToTrx = preorders.filter(p => p.status === 'UNPROCESSED' || p.status === 'pending');
+        // 1. Cek status order yang EXECUTED menggunakan /history
+        const executedOrders = preorders.filter(p => p.status === 'EXECUTED');
+        for (const order of executedOrders) {
+            try {
+                const historyRes = await api.cekHistory(order.reff_id);
+                if (historyRes && historyRes.ok && Array.isArray(historyRes.data) && historyRes.data.length > 0) {
+                    const hData = historyRes.data[0];
+                    const statusText = (hData.status_text || '').toUpperCase();
+                    let finalStatus = null;
+
+                    if (statusText === 'SUKSES' || statusText === 'SUCCESS') {
+                        finalStatus = 'SUCCESS';
+                    } else if (statusText === 'GAGAL' || statusText === 'ERROR' || statusText === 'BATAL') {
+                        finalStatus = 'ERROR';
+                    }
+
+                    if (finalStatus) {
+                        db.get('preorders')
+                            .find({ id: order.id })
+                            .assign({
+                                status: finalStatus,
+                                keterangan: hData.keterangan || statusText,
+                                updated_at: new Date().toISOString()
+                            })
+                            .write();
+                        
+                        logger.info(`Order ${order.id} status updated via checker to ${finalStatus}`);
+                        
+                        const notifyMsg = `🔔 <b>STATUS UPDATE (CHECKER)</b> 🔔\n\nID: <code>${order.id}</code>\nNomor: ${order.nomor}\nPaket: ${order.nama_produk}\nStatus: <b>${finalStatus}</b>\nKet: ${hData.keterangan || statusText}`;
+                        broadcastToAdmins(bot, notifyMsg);
+
+                        if (finalStatus === 'SUCCESS') {
+                            const completedOrder = db.get('preorders').find({ id: order.id }).value();
+                            historyDb.get('history').push(completedOrder).write();
+                            db.get('preorders').remove({ id: order.id }).write();
+                            logger.info(`Order ${order.id} moved to history by checker`);
+                        }
+                    }
+                }
+            } catch (err) {
+                logger.error(`Failed to check history for EXECUTED order ${order.id}`, err.message);
+            }
+        }
+
+        // 2. Eksekusi transaksi untuk yang UNPROCESSED
+        // Get updated preorders after potential history moves
+        const currentPreorders = db.get('preorders').value() || [];
+        const ordersToTrx = currentPreorders.filter(p => p.status === 'UNPROCESSED' || p.status === 'pending');
 
         if (ordersToTrx.length === 0) return;
 
         const stockRes = await api.cekStock();
-        if (!stockRes || !stockRes.data) {
-            logger.warn('Failed to get stock from server');
+        let stocks = [];
+        if (Array.isArray(stockRes)) {
+            stocks = stockRes;
+        } else if (stockRes && Array.isArray(stockRes.data)) {
+            stocks = stockRes.data;
+        } else {
+            logger.warn('Failed to parse stock from server, invalid format');
             return;
         }
-        
-        const stocks = stockRes.data;
 
         for (const preorder of ordersToTrx) {
-            const productStock = stocks.find(s => s.type === preorder.kode_produk);
-            const sisaSlot = productStock ? parseInt(productStock.sisa_slot, 10) : 0;
+            const productStock = stocks.find(s => s.type === preorder.kode_produk || s.kode_produk === preorder.kode_produk);
+            const sisaSlotStr = productStock ? (productStock.sisa_slot || productStock.stok || productStock.stock || 0) : 0;
+            const sisaSlot = parseInt(sisaSlotStr, 10);
             
             if (productStock && sisaSlot > 0) {
                 logger.info(`Stock found for ${preorder.kode_produk} (Slot: ${sisaSlot}). Executing trx...`, { id: preorder.id });
@@ -35,12 +85,6 @@ async function checkAndProcess(bot) {
                     const isFailedTrx = !trxRes || trxRes.ok === false || trxRes.status === false || (trxRes.message && trxRes.message.toLowerCase().includes('gagal'));
 
                     if (isFailedTrx) {
-                        // Keep as UNPROCESSED to retry next cycle if it's a server rejection but stock was supposedly there
-                        // Or set to ERROR if it's a definitive failure. 
-                        // The todo says status becomes EXECUTED after execution.
-                        // Let's stick to the workflow: UNPROCESSED -> EXECUTED.
-                        // If the API call itself returns a "failed" message, it's still technically "executed" from our side.
-                        
                         db.get('preorders')
                           .find({ id: preorder.id })
                           .assign({
@@ -61,12 +105,11 @@ async function checkAndProcess(bot) {
                           })
                           .write();
                           
-                        broadcastToAdmins(bot, `🚀 <b>TRANSAKSI TEREKSEKUSI</b> 🚀\n\nID: <code>${preorder.id}</code>\nNomor: ${preorder.nomor}\nPaket: ${preorder.nama_produk}\nStatus: <b>EXECUTED</b>\n\nMenunggu update dari webhook...`);
+                        broadcastToAdmins(bot, `🚀 <b>TRANSAKSI TEREKSEKUSI</b> 🚀\n\nID: <code>${preorder.id}</code>\nNomor: ${preorder.nomor}\nPaket: ${preorder.nama_produk}\nStatus: <b>EXECUTED</b>\n\nMenunggu update dari webhook / auto check...`);
                     }
 
                 } catch (error) {
                     logger.error(`Trx failed for ${preorder.id}`, error.message);
-                    // If error (e.g. timeout), keep as UNPROCESSED to retry later
                     broadcastToAdmins(bot, `❌ <b>KONEKSI GAGAL SAAT TRANSAKSI</b> ❌\n\nID: <code>${preorder.id}</code>\nError: ${error.message}\n\nStatus tetap <b>UNPROCESSED</b>.`);
                 }
             }
@@ -79,10 +122,6 @@ async function checkAndProcess(bot) {
 
 function broadcastToAdmins(bot, message) {
     const adminChatIds = db.get('admin_chats').value() || [];
-    const allowedUsernames = (process.env.AUTHORIZED_USERS || '').toLowerCase().split(',').map(u => u.trim());
-    
-    // Note: admin_chats already contains IDs of authorized users who started the bot.
-    // We filter them by AUTHORIZED_USERS if needed, but currently bot.js adds anyone in the list to admin_chats.
     
     for (const chatId of adminChatIds) {
         bot.telegram.sendMessage(chatId, message, { parse_mode: 'HTML' }).catch(e => {
@@ -95,7 +134,9 @@ function startChecker(bot, intervalMs = 10000) {
     logger.info(`Starting checker with interval ${intervalMs}ms`);
     
     async function run() {
+        logger.info('Mengecek stok dan status order secara otomatis...');
         await checkAndProcess(bot);
+        logger.info(`Cek selanjutnya dalam ${intervalMs / 1000} detik...`);
         setTimeout(run, intervalMs);
     }
     

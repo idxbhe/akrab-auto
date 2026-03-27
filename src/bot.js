@@ -394,9 +394,16 @@ bot.action(/execmanual_(.+)/, async (ctx) => {
     
     try {
         const stockRes = await api.cekStock();
-        const stocks = stockRes.data;
-        const productStock = stocks.find(s => s.type === p.kode_produk);
-        const sisaSlot = productStock ? parseInt(productStock.sisa_slot, 10) : 0;
+        let stocks = [];
+        if (Array.isArray(stockRes)) {
+            stocks = stockRes;
+        } else if (stockRes && Array.isArray(stockRes.data)) {
+            stocks = stockRes.data;
+        }
+
+        const productStock = stocks.find(s => s.type === p.kode_produk || s.kode_produk === p.kode_produk);
+        const sisaSlotStr = productStock ? (productStock.sisa_slot || productStock.stok || productStock.stock || 0) : 0;
+        const sisaSlot = parseInt(sisaSlotStr, 10);
 
         if (sisaSlot <= 0) {
             return ctx.reply(`❌ Stok tidak tersedia untuk ${p.nama_produk}. Status tetap ${p.status}.`);
