@@ -345,7 +345,7 @@ bot.hears('📜 History', async (ctx) => {
 
     let msg = '📜 **5 History Terakhir (SUCCESS):**\n\n';
     history.forEach((p, i) => {
-        msg += `${i+1}. \`${p.nomor}\` - ${p.nama_produk}\n   📅 ${p.updated_at}\n\n`;
+        msg += `${i+1}. \`${p.nomor}\` - ${p.nama_produk}\n   📅 ${logger.formatDate(p.updated_at)}\n\n`;
     });
 
     ctx.reply(msg, { parse_mode: 'Markdown', ...mainMenu });
@@ -364,9 +364,11 @@ bot.hears('📦 Cek Stok', async (ctx) => {
                 const sisa = stockData ? (stockData.sisa_slot || stockData.stok || stockData.stock || 0) : 0;
                 const ghostLevel = ghostLevels[p.type] || 0;
                 
-                let line = `- <code>${p.nama} (${p.type}): ${sisa} slot</code>`;
+                // Align names by padding them to a fixed width
+                const paddedName = p.nama.padEnd(10, ' ');
+                let line = `- <code>${paddedName} : ${sisa} slot</code>`;
                 if (ghostLevel > 0) {
-                    line += ` ⚠️ <i>(Ghost: ${ghostLevel})</i>`;
+                    line += ` <i>(⚠️ Ghost: ${ghostLevel})</i>`;
                 }
                 msg += line + '\n';
             });
@@ -395,7 +397,7 @@ bot.action(/detail_(.+)/, async (ctx) => {
     msg += `\`Status :\` \`${p.status}\`\n`;
     msg += `\`Reff ID:\` \`${p.reff_id}\`\n`;
     msg += `\`Ket.   :\` \`${p.keterangan || '-'}\`\n`;
-    msg += `\`Dibuat :\` \`${p.created_at}\``;
+    msg += `\`Dibuat :\` \`${logger.formatDate(p.created_at)}\``;
     
     await ctx.answerCbQuery();
     await ctx.reply(msg, { parse_mode: 'Markdown' });

@@ -60,7 +60,7 @@ async function checkAndProcess(bot) {
                             .write();
                         
                         logger.info(`Order ${order.id} updated to ${finalStatus} via auto-history check. Ket: ${hData.keterangan}`);
-                        broadcastToAdmins(bot, `🔔 <b>STATUS UPDATE (AUTO CHECK)</b> 🔔\n\nID: <code>${order.id}</code>\nNomor: ${order.nomor}\nPaket: ${order.nama_produk}\nStatus: <b>${finalStatus}</b>\nKet: ${hData.keterangan || statusText}`);
+                        broadcastToAdmins(bot, `🔔 <b>STATUS UPDATE (AUTO CHECK)</b> 🔔\n\nID: <code>${order.id}</code>\nNomor: ${order.nomor}\nPaket: ${order.nama_produk}\nStatus: <b>${finalStatus}</b>\nKet: ${hData.keterangan || statusText}\n\nWaktu: ${logger.formatDate(new Date().toISOString())}`);
 
                         if (finalStatus === 'SUCCESS') {
                             const completedOrder = db.get('preorders').find({ id: order.id }).value();
@@ -103,7 +103,7 @@ async function checkAndProcess(bot) {
                             .write();
                         
                         logger.error(`Ghost Stock detected for order ${order.id} at level ${attemptedStock}. Reverting to UNPROCESSED.`);
-                        broadcastToAdmins(bot, `⚠️ <b>GHOST STOCK TERDETEKSI</b> ⚠️\n\nID: <code>${order.id}</code>\nNomor: ${order.nomor}\nPaket: ${order.nama_produk}\nLevel: ${attemptedStock}\n\nSistem akan mengabaikan stok ini sampai jumlah stok bertambah.`);
+                        broadcastToAdmins(bot, `⚠️ <b>GHOST STOCK TERDETEKSI</b> ⚠️\n\nID: <code>${order.id}</code>\nNomor: ${order.nomor}\nPaket: ${order.nama_produk}\nLevel: ${attemptedStock}\n\nWaktu: ${logger.formatDate(new Date().toISOString())}\n\nSistem akan mengabaikan stok ini sampai jumlah stok bertambah.`);
                     } else {
                         db.get('preorders')
                           .find({ id: order.id })
@@ -192,7 +192,7 @@ async function checkAndProcess(bot) {
 
             logger.info(`EKSEKUSI OTOMATIS: ${preorder.nomor} (${preorder.kode_produk}) - Slot: ${sisaSlot}`);
             
-            broadcastToAdmins(bot, `🔔 <b>MEMULAI TRANSAKSI OTOMATIS</b> 🔔\n\nID: <code>${preorder.id}</code>\nNomor: <code>${preorder.nomor}</code>\nProduk: ${preorder.nama_produk} (${preorder.kode_produk})\nReff ID: <code>${preorder.reff_id}</code>\nSisa Slot: ${sisaSlot}`);
+            broadcastToAdmins(bot, `🔔 <b>MEMULAI TRANSAKSI OTOMATIS</b> 🔔\n\nID: <code>${preorder.id}</code>\nNomor: <code>${preorder.nomor}</code>\nProduk: ${preorder.nama_produk} (${preorder.kode_produk})\nReff ID: <code>${preorder.reff_id}</code>\nSisa Slot: ${sisaSlot}\n\nWaktu: ${logger.formatDate(new Date().toISOString())}`);
 
             try {
                 const trxRes = await api.doTransaksi(preorder.kode_produk, preorder.nomor, preorder.reff_id);
@@ -210,11 +210,11 @@ async function checkAndProcess(bot) {
                   })
                   .write();
                   
-                broadcastToAdmins(bot, `🚀 <b>TRANSAKSI TEREKSEKUSI</b> 🚀\n\nID: <code>${preorder.id}</code>\nNomor: ${preorder.nomor}\nStatus: <b>EXECUTED</b>\n\nMenunggu pengecekan otomatis dalam 10 detik...`);
+                broadcastToAdmins(bot, `🚀 <b>TRANSAKSI TEREKSEKUSI</b> 🚀\n\nID: <code>${preorder.id}</code>\nNomor: ${preorder.nomor}\nStatus: <b>EXECUTED</b>\n\nWaktu: ${logger.formatDate(new Date().toISOString())}\n\nMenunggu pengecekan otomatis dalam 10 detik...`);
 
             } catch (error) {
                 logger.error(`Trx Gagal untuk ${preorder.id}:`, error.message);
-                broadcastToAdmins(bot, `❌ <b>KONEKSI GAGAL SAAT TRANSAKSI</b> ❌\n\nID: <code>${preorder.id}</code>\nError: ${error.message}\n\nStatus tetap <b>UNPROCESSED</b>.`);
+                broadcastToAdmins(bot, `❌ <b>KONEKSI GAGAL SAAT TRANSAKSI</b> ❌\n\nID: <code>${preorder.id}</code>\nError: ${error.message}\n\nStatus tetap <b>UNPROCESSED</b>.\n\nWaktu: ${logger.formatDate(new Date().toISOString())}`);
             }
         } else {
             logger.debug(`Stok untuk ${preorder.kode_produk} kosong (0). Skip.`);

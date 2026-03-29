@@ -47,10 +47,28 @@ function logApi(action, data = null) {
   }
 }
 
+function formatDate(isoString) {
+  if (!isoString) return '-';
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return isoString;
+  
+  const pad = (n) => n.toString().padStart(2, '0');
+  
+  const day = pad(d.getDate());
+  const month = pad(d.getMonth() + 1);
+  const year = d.getFullYear();
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  const seconds = pad(d.getSeconds());
+  
+  return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
+}
+
 module.exports = {
   info: (msg, data) => log('INFO', msg, data),
   error: (msg, data) => log('ERROR', msg, data),
   warn: (msg, data) => log('WARN', msg, data),
   debug: (msg, data) => log('DEBUG', msg, data),
-  logApi
+  logApi,
+  formatDate
 };
