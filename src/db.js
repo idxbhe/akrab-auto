@@ -8,7 +8,8 @@ const db = low(adapter);
 
 db.defaults({ 
     preorders: [],
-    admin_chats: []
+    admin_chats: [],
+    ghost_levels: {}
 })
   .write();
 

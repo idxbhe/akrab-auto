@@ -429,6 +429,7 @@ bot.action(/execmanual_(.+)/, async (ctx) => {
             .find({ id: p.id })
             .assign({
                 status: 'EXECUTED',
+                attempted_stock: sisaSlot,
                 keterangan: 'Manual: ' + (trxRes.msg || trxRes.message || JSON.stringify(trxRes)),
                 updated_at: new Date().toISOString(),
                 next_status_check: Date.now() + 10000,

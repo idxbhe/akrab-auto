@@ -83,20 +83,27 @@ async function checkAndProcess(bot) {
                     logger.warn(`Order ${order.id} tidak ditemukan di history server (${newEmptyCount}/3).`);
 
                     if (newEmptyCount >= 3) {
-                        const finalStatus = 'ERROR';
-                        const keterangan = 'Status tidak pasti (data tidak ditemukan di server setelah 3 kali cek)';
+                        const attemptedStock = order.attempted_stock || 0;
+                        const kodeProduk = order.kode_produk;
                         
+                        // Update ghost_levels in DB
+                        const ghostLevels = db.get('ghost_levels').value() || {};
+                        ghostLevels[kodeProduk] = attemptedStock;
+                        db.set('ghost_levels', ghostLevels).write();
+
                         db.get('preorders')
                             .find({ id: order.id })
                             .assign({
-                                status: finalStatus,
-                                keterangan: keterangan,
-                                updated_at: new Date().toISOString()
+                                status: 'UNPROCESSED',
+                                keterangan: `Ghost Stock terdeteksi pada level ${attemptedStock}. Menunggu stok bertambah.`,
+                                updated_at: new Date().toISOString(),
+                                next_status_check: 0,
+                                empty_check_count: 0
                             })
                             .write();
                         
-                        logger.error(`Order ${order.id} dihentikan pengecekannya. Status: ${finalStatus}`);
-                        broadcastToAdmins(bot, `⚠️ <b>TRANSAKSI BERAKHIR (TIMEOUT)</b> ⚠️\n\nID: <code>${order.id}</code>\nNomor: ${order.nomor}\nPaket: ${order.nama_produk}\nStatus: <b>ERROR</b>\nKet: ${keterangan}`);
+                        logger.error(`Ghost Stock detected for order ${order.id} at level ${attemptedStock}. Reverting to UNPROCESSED.`);
+                        broadcastToAdmins(bot, `⚠️ <b>GHOST STOCK TERDETEKSI</b> ⚠️\n\nID: <code>${order.id}</code>\nNomor: ${order.nomor}\nPaket: ${order.nama_produk}\nLevel: ${attemptedStock}\n\nSistem akan mengabaikan stok ini sampai jumlah stok bertambah.`);
                     } else {
                         db.get('preorders')
                           .find({ id: order.id })
@@ -166,7 +173,23 @@ async function checkAndProcess(bot) {
         const sisaSlotStr = productStock.sisa_slot || productStock.stok || productStock.stock || productStock.sisa || 0;
         const sisaSlot = parseInt(sisaSlotStr, 10);
         
+        // Reset ghost_level if stock drops to 0
+        const ghostLevels = db.get('ghost_levels').value() || {};
+        const kodeProduk = preorder.kode_produk;
+        if (sisaSlot === 0 && ghostLevels[kodeProduk]) {
+            ghostLevels[kodeProduk] = 0;
+            db.set('ghost_levels', ghostLevels).write();
+            logger.info(`Ghost level for ${kodeProduk} reset to 0 because stock reached 0.`);
+        }
+
+        const currentGhostLevel = ghostLevels[kodeProduk] || 0;
         if (sisaSlot > 0) {
+            // Check against ghost level - only skip if EXACTLY the same
+            if (sisaSlot === currentGhostLevel) {
+                logger.debug(`Skipping ${preorder.nomor} (${kodeProduk}) because stock level ${sisaSlot} is still at confirmed ghost level.`);
+                continue;
+            }
+
             logger.info(`EKSEKUSI OTOMATIS: ${preorder.nomor} (${preorder.kode_produk}) - Slot: ${sisaSlot}`);
             
             broadcastToAdmins(bot, `🔔 <b>MEMULAI TRANSAKSI OTOMATIS</b> 🔔\n\nID: <code>${preorder.id}</code>\nNomor: <code>${preorder.nomor}</code>\nProduk: ${preorder.nama_produk} (${preorder.kode_produk})\nReff ID: <code>${preorder.reff_id}</code>\nSisa Slot: ${sisaSlot}`);
@@ -179,6 +202,7 @@ async function checkAndProcess(bot) {
                   .find({ id: preorder.id })
                   .assign({
                       status: 'EXECUTED',
+                      attempted_stock: sisaSlot,
                       keterangan: 'Auto: ' + (trxRes.msg || trxRes.message || JSON.stringify(trxRes)),
                       updated_at: new Date().toISOString(),
                       next_status_check: Date.now() + 10000,
