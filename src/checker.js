@@ -7,12 +7,12 @@ function startChecker(bot, intervalMs = 10000) {
     
     async function run() {
         try {
-            logger.info('--- MEMULAI SIKLUS PENGECEKAN STOK ---');
+            logger.debug('--- MEMULAI SIKLUS PENGECEKAN STOK ---');
             await checkAndProcess(bot);
         } catch (err) {
             logger.error('Checker CRITICAL error in run():', err.message);
         } finally {
-            logger.info(`Siklus selesai. Cek selanjutnya dalam ${intervalMs / 1000} detik...`);
+            logger.debug(`Siklus selesai. Cek selanjutnya dalam ${intervalMs / 1000} detik...`);
             setTimeout(run, intervalMs);
         }
     }
@@ -118,7 +118,7 @@ async function checkAndProcess(bot) {
             }
         }
     } else {
-        logger.info('Tidak ada order EXECUTED untuk dicek statusnya.');
+        logger.debug('Tidak ada order EXECUTED untuk dicek statusnya.');
     }
 
     // 2. Eksekusi transaksi untuk yang UNPROCESSED
@@ -126,7 +126,7 @@ async function checkAndProcess(bot) {
     const unprocessedOrders = currentPreorders.filter(p => p.status === 'UNPROCESSED' || p.status === 'pending');
 
     if (unprocessedOrders.length === 0) {
-        logger.info('Tidak ada order UNPROCESSED/pending. Melewati pengecekan stok.');
+        logger.debug('Tidak ada order UNPROCESSED/pending. Melewati pengecekan stok.');
         return;
     }
 

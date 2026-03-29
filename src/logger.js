@@ -4,6 +4,10 @@ const path = require('path');
 const logFile = path.join(__dirname, '..', 'bot.log');
 
 function log(level, message, data = null) {
+  if (level === 'DEBUG' && process.env.DEBUG !== 'true') {
+    return;
+  }
+
   const timestamp = new Date().toISOString();
   let logStr = `[${timestamp}] [${level}] ${message}`;
   if (data) {
