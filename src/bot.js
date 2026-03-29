@@ -325,7 +325,7 @@ bot.hears('📋 List', async (ctx) => {
             Markup.button.callback('🚀', `execmanual_${p.id}`)
         ];
         
-        if (p.status === 'ERROR' || p.status === 'UNPROCESSED') {
+        if (p.status === 'ERROR') {
             row.push(Markup.button.callback('♻️', `retrybtn_${p.id}`));
         }
 
@@ -357,20 +357,20 @@ bot.hears('📦 Cek Stok', async (ctx) => {
         const stocks = stockRes.data;
         const ghostLevels = db.get('ghost_levels').value() || {};
         
-        let msg = '📦 <b>Stok saat ini:</b>\n\n';
+        let msg = '📦 <b>Status Stok Akrab:</b>\n\n';
         if (stocks && Array.isArray(stocks) && stocks.length > 0) {
             PRODUCTS.forEach(p => {
                 const stockData = stocks.find(s => s.type === p.type);
                 const sisa = stockData ? (stockData.sisa_slot || stockData.stok || stockData.stock || 0) : 0;
                 const ghostLevel = ghostLevels[p.type] || 0;
                 
-                let line = `- ${p.nama} (${p.type}): <b>${sisa} slot</b>`;
+                let line = `- <code>${p.nama} (${p.type}): ${sisa} slot</code>`;
                 if (ghostLevel > 0) {
                     line += ` ⚠️ <i>(Ghost: ${ghostLevel})</i>`;
                 }
                 msg += line + '\n';
             });
-            msg += '\n<i>Catatan: Jika angka stok sama dengan Ghost, bot akan melewati eksekusi.</i>';
+            msg += '\n<pre>Catatan:\nJika angka stok sama dengan Ghost,\nbot akan melewati eksekusi.</pre>';
         } else {
             msg += 'Data stok tidak ditemukan atau kosong.';
         }
