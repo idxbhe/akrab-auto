@@ -355,18 +355,26 @@ bot.hears('📦 Cek Stok', async (ctx) => {
     try {
         const stockRes = await api.cekStock();
         const stocks = stockRes.data;
+        const ghostLevels = db.get('ghost_levels').value() || {};
         
-        let msg = '📦 Stok saat ini:\n\n';
+        let msg = '📦 <b>Stok saat ini:</b>\n\n';
         if (stocks && Array.isArray(stocks) && stocks.length > 0) {
             PRODUCTS.forEach(p => {
                 const stockData = stocks.find(s => s.type === p.type);
-                const sisa = stockData ? stockData.sisa_slot : p.sisa_slot;
-                msg += `- ${p.nama} (${p.type}): ${sisa} slot\n`;
+                const sisa = stockData ? (stockData.sisa_slot || stockData.stok || stockData.stock || 0) : 0;
+                const ghostLevel = ghostLevels[p.type] || 0;
+                
+                let line = `- ${p.nama} (${p.type}): <b>${sisa} slot</b>`;
+                if (ghostLevel > 0) {
+                    line += ` ⚠️ <i>(Ghost: ${ghostLevel})</i>`;
+                }
+                msg += line + '\n';
             });
+            msg += '\n<i>Catatan: Jika angka stok sama dengan Ghost, bot akan melewati eksekusi.</i>';
         } else {
             msg += 'Data stok tidak ditemukan atau kosong.';
         }
-        ctx.reply(msg, { parse_mode: 'Markdown', ...mainMenu });
+        ctx.reply(msg, { parse_mode: 'HTML', ...mainMenu });
     } catch (error) {
         ctx.reply('❌ Gagal mengambil data stok dari server.', { ...mainMenu });
         logger.error('Failed to get stock in bot', { error: error.message });
