@@ -66,7 +66,14 @@ app.all('/webhook', (req, res) => {
 
             // Notify Admins
             const adminChatIds = db.get('admin_chats').value() || [];
-            const notifyMsg = `🔔 <b>STATUS UPDATE (WEBHOOK)</b> 🔔\n\nID: <code>${order.id}</code>\nNomor: ${order.nomor}\nPaket: ${order.nama_produk}\nStatus: <b>${finalStatus}</b>\nKet: ${keterangan}\n\nWaktu: ${logger.formatDate(new Date().toISOString())}`;
+            const notifyMsg = `🔔 <b>STATUS UPDATE (WEBHOOK)</b>\n\n` +
+                              `<code>ID      : ${order.id}</code>\n` +
+                              `<code>Nomor   : ${order.nomor}</code>\n` +
+                              `<code>Paket   : ${order.nama_produk}</code>\n` +
+                              `<code>Status  : ${finalStatus}</code>\n` +
+                              `<code>Ket     : ${keterangan}</code>\n` +
+                              `---------------------------------------------------------\n` +
+                              `Waktu   : ${logger.formatDate(new Date().toISOString())}`;
             
             for (const chatId of adminChatIds) {
                 bot.telegram.sendMessage(chatId, notifyMsg, { parse_mode: 'HTML' }).catch(e => logger.error(`Failed to notify admin ${chatId}`, e.message));

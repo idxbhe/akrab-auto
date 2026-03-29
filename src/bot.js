@@ -98,7 +98,14 @@ const addPreorderWizard = new Scenes.WizardScene(
             
             db.get('preorders').push(newPreorder).write();
             
-            ctx.reply(`✅ Pre-order berhasil ditambahkan!\n\n\`Nomor  :\` \`${nomor}\`\n\`Paket  :\` \`${product.nama}\` (\`${product.type}\`)\n\`Status :\` \`UNPROCESSED\``, { parse_mode: 'Markdown', ...mainMenu });
+            const successMsg = `✅ <b>PRE-ORDER BERHASIL</b>\n\n` +
+                               `<code>Nomor   : ${nomor}</code>\n` +
+                               `<code>Paket   : ${product.nama} (${product.type})</code>\n` +
+                               `<code>Status  : UNPROCESSED</code>\n` +
+                               `---------------------------------------------------------\n` +
+                               `Waktu   : ${logger.formatDate(new Date().toISOString())}`;
+            
+            ctx.reply(successMsg, { parse_mode: 'HTML', ...mainMenu });
             logger.info('Preorder added', newPreorder);
             ctx.answerCbQuery();
             return ctx.scene.leave();
@@ -252,7 +259,14 @@ const editPreorderWizard = new Scenes.WizardScene(
               })
               .write();
               
-            ctx.reply(`✅ Pre-order berhasil diupdate.\n\n\`Nomor  :\` \`${nomor}\`\n\`Paket  :\` \`${product.nama}\` (\`${product.type}\`)\n\`Status :\` \`UNPROCESSED\``, { parse_mode: 'Markdown', ...mainMenu });
+            const successMsg = `✅ <b>UPDATE PRE-ORDER BERHASIL</b>\n\n` +
+                               `<code>Nomor   : ${nomor}</code>\n` +
+                               `<code>Paket   : ${product.nama} (${product.type})</code>\n` +
+                               `<code>Status  : UNPROCESSED</code>\n` +
+                               `---------------------------------------------------------\n` +
+                               `Waktu   : ${logger.formatDate(new Date().toISOString())}`;
+              
+            ctx.reply(successMsg, { parse_mode: 'HTML', ...mainMenu });
             logger.info('Preorder edited', { id, nomor, kode_produk: product.type });
             ctx.answerCbQuery();
             return ctx.scene.leave();
@@ -390,17 +404,18 @@ bot.action(/detail_(.+)/, async (ctx) => {
         return ctx.answerCbQuery('❌ Pre-order tidak ditemukan.', { show_alert: true });
     }
     
-    let msg = `🔍 Detail Pre-Order:\n\n`;
-    msg += `\`ID     :\` \`${p.id}\`\n`;
-    msg += `\`Nomor  :\` \`${p.nomor}\`\n`;
-    msg += `\`Paket  :\` \`${p.nama_produk}\` (\`${p.kode_produk}\`)\n`;
-    msg += `\`Status :\` \`${p.status}\`\n`;
-    msg += `\`Reff ID:\` \`${p.reff_id}\`\n`;
-    msg += `\`Ket.   :\` \`${p.keterangan || '-'}\`\n`;
-    msg += `\`Dibuat :\` \`${logger.formatDate(p.created_at)}\``;
+    let msg = `🔍 <b>DETAIL PRE-ORDER</b>\n\n`;
+    msg += `<code>ID      : ${p.id}</code>\n`;
+    msg += `<code>Nomor   : ${p.nomor}</code>\n`;
+    msg += `<code>Paket   : ${p.nama_produk} (${p.kode_produk})</code>\n`;
+    msg += `<code>Status  : ${p.status}</code>\n`;
+    msg += `<code>Reff ID : ${p.reff_id}</code>\n`;
+    msg += `<code>Ket     : ${p.keterangan || '-'}</code>\n`;
+    msg += `---------------------------------------------------------\n`;
+    msg += `Dibuat  : ${logger.formatDate(p.created_at)}`;
     
     await ctx.answerCbQuery();
-    await ctx.reply(msg, { parse_mode: 'Markdown' });
+    await ctx.reply(msg, { parse_mode: 'HTML' });
 });
 
 bot.action(/execmanual_(.+)/, async (ctx) => {
@@ -447,7 +462,14 @@ bot.action(/execmanual_(.+)/, async (ctx) => {
             })
             .write();
         
-        ctx.reply(`✅ Transaksi manual terkirim. Status diubah ke **EXECUTED**. Menunggu webhook...`, { parse_mode: 'Markdown' });
+        const execNotifyMsg = `🚀 <b>TRANSAKSI MANUAL TERKIRIM</b>\n\n` +
+                              `<code>ID      : ${p.id}</code>\n` +
+                              `<code>Nomor   : ${p.nomor}</code>\n` +
+                              `<code>Status  : EXECUTED</code>\n` +
+                              `---------------------------------------------------------\n` +
+                              `Waktu   : ${logger.formatDate(new Date().toISOString())}\n\n` +
+                              `<i>Menunggu pengecekan otomatis...</i>`;
+        ctx.reply(execNotifyMsg, { parse_mode: 'HTML' });
 
     } catch (error) {
         logger.error(`Manual Trx failed for ${p.id}`, error.message);
@@ -497,7 +519,15 @@ bot.action(/retrybtn_(.+)/, async (ctx) => {
         .write();
 
     await ctx.answerCbQuery('🔄 Order di-reset ke UNPROCESSED dengan Reff ID baru.', { show_alert: true });
-    ctx.reply(`🔄 Order \`${p.nomor}\` di-reset ke **UNPROCESSED**.\nReff ID baru: \`${newReffId}\``, { parse_mode: 'Markdown' });
+    
+    const retryMsg = `🔄 <b>ORDER BERHASIL DI-RESET</b>\n\n` +
+                     `<code>Nomor   : ${p.nomor}</code>\n` +
+                     `<code>Status  : UNPROCESSED</code>\n` +
+                     `<code>Reff ID : ${newReffId}</code>\n` +
+                     `---------------------------------------------------------\n` +
+                     `Waktu   : ${logger.formatDate(new Date().toISOString())}`;
+    
+    ctx.reply(retryMsg, { parse_mode: 'HTML' });
 });
 
 bot.action(/editbtn_(.+)/, async (ctx) => {
