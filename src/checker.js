@@ -137,7 +137,7 @@ async function checkAndProcess(bot) {
         return;
     }
 
-    logger.info(`Ditemukan ${unprocessedOrders.length} order UNPROCESSED. Mengambil stok...`);
+    logger.debug(`Ditemukan ${unprocessedOrders.length} order UNPROCESSED. Mengambil stok...`);
     let stockRes;
     try {
         stockRes = await api.cekStock();
@@ -156,7 +156,7 @@ async function checkAndProcess(bot) {
         return;
     }
 
-    logger.info(`Stok dari server: ${stocks.length} produk ditemukan.`);
+    logger.debug(`Stok dari server: ${stocks.length} produk ditemukan.`);
 
     for (const preorder of unprocessedOrders) {
         const productStock = stocks.find(s => 
@@ -179,7 +179,7 @@ async function checkAndProcess(bot) {
         if (sisaSlot === 0 && ghostLevels[kodeProduk]) {
             ghostLevels[kodeProduk] = 0;
             db.set('ghost_levels', ghostLevels).write();
-            logger.info(`Ghost level for ${kodeProduk} reset to 0 because stock reached 0.`);
+            logger.debug(`Ghost level for ${kodeProduk} reset to 0 because stock reached 0.`);
         }
 
         const currentGhostLevel = ghostLevels[kodeProduk] || 0;
@@ -217,7 +217,7 @@ async function checkAndProcess(bot) {
                 broadcastToAdmins(bot, `❌ <b>KONEKSI GAGAL SAAT TRANSAKSI</b> ❌\n\nID: <code>${preorder.id}</code>\nError: ${error.message}\n\nStatus tetap <b>UNPROCESSED</b>.`);
             }
         } else {
-            logger.info(`Stok untuk ${preorder.kode_produk} kosong (0). Skip.`);
+            logger.debug(`Stok untuk ${preorder.kode_produk} kosong (0). Skip.`);
         }
     }
 }
