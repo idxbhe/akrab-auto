@@ -26,6 +26,7 @@ app.all('/webhook', (req, res) => {
         }
 
         logger.info(`Webhook received: ${message}`);
+        logger.logApi('WEBHOOK_MESSAGE', message);
 
         const match = message.match(RX);
         if (!match || !match.groups) {

@@ -30,8 +30,12 @@ async function doTransaksi(produk, tujuan, reff_id) {
                 reff_id
             }
         });
+        logger.logApi('TRX_RESPONSE', response.data);
         return response.data;
     } catch (error) {
+        if (error.response) {
+            logger.logApi('TRX_ERROR_RESPONSE', error.response.data);
+        }
         logger.error('Failed to do transaksi', { message: error.message, produk, tujuan, reff_id });
         throw error;
     }
@@ -45,8 +49,12 @@ async function cekHistory(refid) {
                 refid
             }
         });
+        logger.logApi('HISTORY_RESPONSE', response.data);
         return response.data;
     } catch (error) {
+        if (error.response) {
+            logger.logApi('HISTORY_ERROR_RESPONSE', error.response.data);
+        }
         logger.error('Failed to cek history', { message: error.message, refid });
         throw error;
     }
