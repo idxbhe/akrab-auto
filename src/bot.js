@@ -311,26 +311,30 @@ bot.hears('📋 List', async (ctx) => {
         return ctx.reply('📭 Daftar pre-order kosong.', mainMenu);
     }
     
-    ctx.reply('📋 Daftar Pre-Order:', mainMenu);
+    ctx.reply('📋 <b>Daftar Pre-Order:</b>', { parse_mode: 'HTML', ...mainMenu });
     
     for (const p of preorders) {
-        const msg = `\`Nomor  :\` \`${p.nomor}\`\n\`Paket  :\` \`${p.nama_produk}\` (\`${p.kode_produk}\`)\n\`Status :\` \`${p.status}\``;
+        let msg = `\`Nomor  :\` \`${p.nomor}\`\n`;
+        msg += `\`Paket  :\` \`${p.nama_produk}\` (\`${p.kode_produk}\`)\n`;
+        msg += `\`Status :\` \`${p.status}\`\n`;
+        msg += `-------------------------------------------`;
         
         const row1 = [
-            Markup.button.callback('🔍 Detail', `detail_${p.id}`),
-            Markup.button.callback('🚀 EXEC (manual)', `execmanual_${p.id}`)
+            Markup.button.callback('🔍', `detail_${p.id}`),
+            Markup.button.callback('🔄', `cekbtn_${p.id}`)
         ];
+        
         const row2 = [
-            Markup.button.callback('✏️ Edit', `editbtn_${p.id}`),
-            Markup.button.callback('🗑️ Hapus', `deletebtn_${p.id}`)
+            Markup.button.callback('🚀', `execmanual_${p.id}`)
         ];
-        const row3 = [
-            Markup.button.callback('🔄 Cek', `cekbtn_${p.id}`)
-        ];
-
-        if (p.status === 'ERROR') {
-            row3.push(Markup.button.callback('♻️ Retry', `retrybtn_${p.id}`));
+        if (p.status === 'ERROR' || p.status === 'UNPROCESSED') {
+            row2.push(Markup.button.callback('♻️', `retrybtn_${p.id}`));
         }
+
+        const row3 = [
+            Markup.button.callback('✏️', `editbtn_${p.id}`),
+            Markup.button.callback('🗑️', `deletebtn_${p.id}`)
+        ];
 
         const buttons = Markup.inlineKeyboard([row1, row2, row3]);
         await ctx.reply(msg, { parse_mode: 'Markdown', ...buttons });
