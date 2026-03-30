@@ -111,6 +111,9 @@ bot.launch().then(() => {
     logger.error('Failed to start bot', err);
 });
 
+// Start observer for channel notifications
+require('./src/observer')(bot);
+
 // Enable graceful stop
 process.once('SIGINT', () => {
     bot.stop('SIGINT');

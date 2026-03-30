@@ -9,3 +9,6 @@ bot.log
 .testenv
 msg.txt
 history.db
+.geminiignore
+.real.env
+
