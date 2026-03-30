@@ -11,4 +11,4 @@ msg.txt
 history.db
 .geminiignore
 .real.env
-
+api.log

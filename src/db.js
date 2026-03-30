@@ -9,7 +9,12 @@ const db = low(adapter);
 db.defaults({ 
     preorders: [],
     admin_chats: [],
-    ghost_levels: {}
+    ghost_levels: {},
+    system_config: {
+        is_paused: false,
+        pause_reason: "",
+        last_pause_at: null
+    }
 })
   .write();
 

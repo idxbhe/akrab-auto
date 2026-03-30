@@ -147,6 +147,12 @@ async function checkAndProcess(bot) {
     }
 
     // 2. Eksekusi transaksi untuk yang UNPROCESSED
+    const systemConfig = db.get('system_config').value() || { is_paused: false };
+    if (systemConfig.is_paused) {
+        logger.debug('Bot sedang DIPAUSE (Saldo Habis). Melewati eksekusi UNPROCESSED.');
+        return;
+    }
+
     const currentPreorders = db.get('preorders').value() || [];
     const unprocessedOrders = currentPreorders.filter(p => p.status === 'UNPROCESSED' || p.status === 'pending');
 
@@ -245,16 +251,34 @@ async function checkAndProcess(bot) {
                     }
 
                     if (msg.includes('saldo tidak mencukupi')) {
-                        logger.error(`Insufficient balance for order ${preorder.id}. Setting to GAGAL.`);
-                        db.get('preorders')
-                          .find({ id: preorder.id })
-                          .assign({
-                              status: 'GAGAL',
-                              keterangan: trxRes.msg,
-                              updated_at: new Date().toISOString()
-                          })
-                          .write();
-                        continue;
+                        logger.error(`Insufficient balance detected for ${preorder.id}. PAUSING BOT.`);
+                        
+                        // Set system pause in DB
+                        db.set('system_config', {
+                            is_paused: true,
+                            pause_reason: 'Saldo tidak mencukupi',
+                            last_pause_at: new Date().toISOString()
+                        }).write();
+
+                        // Notify all admins
+                        const { Markup } = require('telegraf');
+                        const adminMsg = `⚠️ <b>BOT DIPAUSE OTOMATIS</b>\n\n` +
+                                         `Saldo di panel tidak mencukupi untuk transaksi:\n` +
+                                         `<code>Nomor : ${preorder.nomor}</code>\n` +
+                                         `<code>Paket : ${preorder.nama_produk}</code>\n\n` +
+                                         `Silakan isi saldo dan klik tombol di bawah untuk melanjutkan.`;
+                        
+                        const adminChatIds = db.get('admin_chats').value() || [];
+                        for (const chatId of adminChatIds) {
+                            bot.telegram.sendMessage(chatId, adminMsg, { 
+                                parse_mode: 'HTML',
+                                ...Markup.inlineKeyboard([
+                                    Markup.button.callback('✅ Saldo Sudah Diisi', 'resume_bot')
+                                ])
+                            }).catch(e => logger.error(`Failed to notify admin ${chatId}`, e.message));
+                        }
+                        
+                        break; // Stop checking other UNPROCESSED in this cycle
                     }
 
                     // For other errors, log and keep as UNPROCESSED for retry

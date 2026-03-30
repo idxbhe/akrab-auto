@@ -312,6 +312,23 @@ bot.use((ctx, next) => {
     return ctx.reply('❌ Anda tidak memiliki akses ke bot ini.');
 });
 
+bot.action('resume_bot', async (ctx) => {
+    db.set('system_config', {
+        is_paused: false,
+        pause_reason: '',
+        last_pause_at: null
+    }).write();
+
+    logger.info(`Bot resumed by ${ctx.from.username}`);
+    
+    try {
+        await ctx.answerCbQuery('🚀 Bot dilanjutkan! Antrean akan segera diproses.');
+        await ctx.editMessageText(`✅ <b>SISTEM DILANJUTKAN</b>\nBot akan kembali memproses antrean secara otomatis.`, { parse_mode: 'HTML' });
+    } catch (e) {
+        ctx.reply('✅ Saldo sudah diisi. Bot kembali berjalan!');
+    }
+});
+
 bot.command('start', (ctx) => {
     ctx.reply('👋 Selamat datang di Bot Pre-Order Kuota Akrab.\n\nSilakan pilih menu di bawah ini:', mainMenu);
 });
@@ -321,6 +338,11 @@ bot.hears('➕ Tambah', (ctx) => {
 });
 
 bot.hears('📋 List', async (ctx) => {
+    const config = db.get('system_config').value() || { is_paused: false };
+    if (config.is_paused) {
+        await ctx.reply(`⚠️ <b>BOT SEDANG DIPAUSE</b>\nAlasan: ${config.pause_reason || 'Saldo Habis'}\n-----------------------------------`, { parse_mode: 'HTML' });
+    }
+
     const preorders = db.get('preorders').value();
     if (!preorders || preorders.length === 0) {
         return ctx.reply('📭 Daftar pre-order kosong.', mainMenu);
@@ -367,6 +389,11 @@ bot.hears('📜 History', async (ctx) => {
 });
 
 bot.hears('📦 Cek Stok', async (ctx) => {
+    const config = db.get('system_config').value() || { is_paused: false };
+    if (config.is_paused) {
+        await ctx.reply(`⚠️ <b>BOT SEDANG DIPAUSE</b>\nAlasan: ${config.pause_reason || 'Saldo Habis'}\n-----------------------------------`, { parse_mode: 'HTML' });
+    }
+
     try {
         const stockRes = await api.cekStock();
         const stocks = stockRes.data;
@@ -467,6 +494,13 @@ bot.action(/execmanual_(.+)/, async (ctx) => {
                 })
                 .write();
             
+            // Auto-resume if successful
+            const config = db.get('system_config').value() || { is_paused: false };
+            if (config.is_paused) {
+                db.set('system_config', { is_paused: false, pause_reason: '', last_pause_at: null }).write();
+                logger.info('Bot auto-resumed due to successful manual execution');
+            }
+
             ctx.reply(`🚀 Transaksi manual untuk ${p.nomor} terkirim. Status: EXECUTED.`);
         } else {
             const msg = (trxRes.msg || trxRes.error || '').toLowerCase();
