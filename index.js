@@ -47,9 +47,9 @@ app.all('/webhook', (req, res) => {
 
         const order = db.get('preorders').find({ reff_id: reffid }).value();
         if (order) {
-            let finalStatus = 'ERROR';
+            let finalStatus = 'GAGAL';
             if (status_code === 0) {
-                finalStatus = 'SUCCESS';
+                finalStatus = 'SUKSES';
             }
 
             // Update order status
@@ -80,7 +80,7 @@ app.all('/webhook', (req, res) => {
             }
 
             // If success, move to history
-            if (finalStatus === 'SUCCESS') {
+            if (finalStatus === 'SUKSES') {
                 const completedOrder = db.get('preorders').find({ reff_id: reffid }).value();
                 historyDb.get('history').push(completedOrder).write();
                 db.get('preorders').remove({ reff_id: reffid }).write();

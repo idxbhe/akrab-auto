@@ -35,15 +35,15 @@ async function checkAndProcess(bot) {
     const now = Date.now();
     const isPeak = isPeakHour();
     
-    // 1. Cek status order yang EXECUTED menggunakan /history
-    const executedOrders = preorders.filter(p => p.status === 'EXECUTED');
-    if (executedOrders.length > 0) {
-        logger.info(`Mengecek status untuk ${executedOrders.length} order EXECUTED...`);
-        for (const order of executedOrders) {
+    // 1. Cek status order yang EXECUTED atau PENDING menggunakan /history
+    const trackableOrders = preorders.filter(p => p.status === 'EXECUTED' || p.status === 'PENDING');
+    if (trackableOrders.length > 0) {
+        logger.info(`Mengecek status untuk ${trackableOrders.length} order (EXECUTED/PENDING)...`);
+        for (const order of trackableOrders) {
             // Check if it's time to check this order
             if (order.next_status_check && now < order.next_status_check) {
                 const waitSec = Math.round((order.next_status_check - now) / 1000);
-                logger.info(`Order ${order.id} menunggu ${waitSec} detik lagi untuk pengecekan status.`);
+                logger.debug(`Order ${order.id} menunggu ${waitSec} detik lagi untuk pengecekan status.`);
                 continue;
             }
 
@@ -55,12 +55,14 @@ async function checkAndProcess(bot) {
                     let finalStatus = null;
 
                     if (statusText === 'SUKSES' || statusText === 'SUCCESS') {
-                        finalStatus = 'SUCCESS';
+                        finalStatus = 'SUKSES';
                     } else if (statusText === 'GAGAL' || statusText === 'ERROR' || statusText === 'BATAL') {
-                        finalStatus = 'ERROR';
+                        finalStatus = 'GAGAL';
+                    } else if (statusText === 'PENDING') {
+                        finalStatus = 'PENDING';
                     }
 
-                    if (finalStatus) {
+                    if (finalStatus && finalStatus !== order.status) {
                         db.get('preorders')
                             .find({ id: order.id })
                             .assign({
@@ -71,20 +73,29 @@ async function checkAndProcess(bot) {
                             .write();
                         
                         logger.info(`Order ${order.id} updated to ${finalStatus} via auto-history check. Ket: ${hData.keterangan}`);
-                        // Notification to channel handled by Observer via notifyOrderUpdate
 
-                        if (finalStatus === 'SUCCESS') {
+                        if (finalStatus === 'SUKSES') {
                             const completedOrder = db.get('preorders').find({ id: order.id }).value();
                             historyDb.get('history').push(completedOrder).write();
                             db.get('preorders').remove({ id: order.id }).write();
                         }
+                    } else if (finalStatus === 'PENDING') {
+                         logger.info(`Order ${order.id} masih PENDING di server. Pengecekan ulang dalam 10 detik.`);
+                         db.get('preorders')
+                          .find({ id: order.id })
+                          .assign({
+                              next_status_check: now + 10000,
+                              empty_check_count: 0
+                          })
+                          .write();
                     } else {
-                        logger.info(`Order ${order.id} masih ${statusText} di server. Pengecekan ulang dalam 10 detik.`);
+                        // EXECUTED but not yet PENDING/SUKSES/GAGAL in data? (Wait)
+                        logger.info(`Order ${order.id} status ${statusText} di server. Pengecekan ulang dalam 10 detik.`);
                         db.get('preorders')
                           .find({ id: order.id })
                           .assign({
                               next_status_check: now + 10000,
-                              empty_check_count: 0 // Reset empty count because data was found
+                              empty_check_count: 0
                           })
                           .write();
                     }
@@ -127,15 +138,12 @@ async function checkAndProcess(bot) {
                 }
             } catch (err) {
                 logger.error(`Failed to check history for order ${order.id}: ${err.message}`);
-                // Retry in 10s on network error
                 db.get('preorders')
                   .find({ id: order.id })
                   .assign({ next_status_check: now + 10000 })
                   .write();
             }
         }
-    } else {
-        logger.debug('Tidak ada order EXECUTED untuk dicek statusnya.');
     }
 
     // 2. Eksekusi transaksi untuk yang UNPROCESSED
@@ -143,11 +151,9 @@ async function checkAndProcess(bot) {
     const unprocessedOrders = currentPreorders.filter(p => p.status === 'UNPROCESSED' || p.status === 'pending');
 
     if (unprocessedOrders.length === 0) {
-        logger.debug('Tidak ada order UNPROCESSED/pending. Melewati pengecekan stok.');
         return;
     }
 
-    logger.debug(`Ditemukan ${unprocessedOrders.length} order UNPROCESSED. Mengambil stok...`);
     let stockRes;
     try {
         stockRes = await api.cekStock();
@@ -162,11 +168,8 @@ async function checkAndProcess(bot) {
     } else if (stockRes && Array.isArray(stockRes.data)) {
         stocks = stockRes.data;
     } else {
-        logger.warn('Format stok tidak dikenali:', stockRes);
         return;
     }
-
-    logger.debug(`Stok dari server: ${stocks.length} produk ditemukan.`);
 
     for (const preorder of unprocessedOrders) {
         const productStock = stocks.find(s => 
@@ -175,28 +178,21 @@ async function checkAndProcess(bot) {
             (s.kode && s.kode.toUpperCase() === preorder.kode_produk.toUpperCase())
         );
 
-        if (!productStock) {
-            logger.warn(`Produk ${preorder.kode_produk} tidak ditemukan di data stok server.`);
-            continue;
-        }
+        if (!productStock) continue;
 
         const sisaSlotStr = productStock.sisa_slot || productStock.stok || productStock.stock || productStock.sisa || 0;
         const sisaSlot = parseInt(sisaSlotStr, 10);
         
-        // Reset ghost_level if stock drops to 0
         const ghostLevels = db.get('ghost_levels').value() || {};
         const kodeProduk = preorder.kode_produk;
         if (sisaSlot === 0 && ghostLevels[kodeProduk]) {
             ghostLevels[kodeProduk] = 0;
             db.set('ghost_levels', ghostLevels).write();
-            logger.debug(`Ghost level for ${kodeProduk} reset to 0 because stock reached 0.`);
         }
 
         const currentGhostLevel = ghostLevels[kodeProduk] || 0;
         if (sisaSlot > 0) {
-            // Check against ghost level - only skip if EXACTLY the same
             if (sisaSlot === currentGhostLevel) {
-                logger.debug(`Skipping ${preorder.nomor} (${kodeProduk}) because stock level ${sisaSlot} is still at confirmed ghost level.`);
                 continue;
             }
 
@@ -206,29 +202,67 @@ async function checkAndProcess(bot) {
                 const trxRes = await api.doTransaksi(preorder.kode_produk, preorder.nomor, preorder.reff_id);
                 logger.info(`Hasil Trx ${preorder.id}:`, trxRes);
                 
-                // First check after execution: 5s if peak hour, else 10s
-                const firstDelay = isPeak ? 5000 : 10000;
+                if (trxRes.ok) {
+                    const firstDelay = isPeak ? 5000 : 10000;
+                    db.get('preorders')
+                      .find({ id: preorder.id })
+                      .assign({
+                          status: 'EXECUTED',
+                          attempted_stock: sisaSlot,
+                          keterangan: 'Auto: ' + (trxRes.msg || 'Akan diproses'),
+                          updated_at: new Date().toISOString(),
+                          next_status_check: Date.now() + firstDelay,
+                          empty_check_count: 0
+                      })
+                      .write();
+                } else {
+                    const msg = (trxRes.msg || trxRes.error || '').toLowerCase();
+                    
+                    if (msg.includes('rate_limited')) {
+                        logger.warn(`Rate limit reached (4 trx/sec). Skipping execution for ${preorder.id}.`);
+                        continue;
+                    }
+                    
+                    if (msg.includes('pending masih 2')) {
+                        logger.warn(`Max pending (2) reached. Stopping execution cycle.`);
+                        break; 
+                    }
 
-                db.get('preorders')
-                  .find({ id: preorder.id })
-                  .assign({
-                      status: 'EXECUTED',
-                      attempted_stock: sisaSlot,
-                      keterangan: 'Auto: ' + (trxRes.msg || trxRes.message || JSON.stringify(trxRes)),
-                      updated_at: new Date().toISOString(),
-                      next_status_check: Date.now() + firstDelay,
-                      empty_check_count: 0
-                  })
-                  .write();
-                  
-                logger.info(`Order ${preorder.id} set to EXECUTED. Waiting for Observer to update channel.`);
+                    if (msg.includes('stok kosong')) {
+                        logger.error(`Ghost Stock confirmed via Trx rejection for ${preorder.id} at level ${sisaSlot}.`);
+                        const updatedGhostLevels = db.get('ghost_levels').value() || {};
+                        updatedGhostLevels[kodeProduk] = sisaSlot;
+                        db.set('ghost_levels', updatedGhostLevels).write();
+                        
+                        db.get('preorders')
+                          .find({ id: preorder.id })
+                          .assign({
+                              keterangan: `Ghost Stock terdeteksi: ${sisaSlot}.`,
+                              updated_at: new Date().toISOString()
+                          })
+                          .write();
+                        continue;
+                    }
 
+                    if (msg.includes('saldo tidak mencukupi')) {
+                        logger.error(`Insufficient balance for order ${preorder.id}. Setting to GAGAL.`);
+                        db.get('preorders')
+                          .find({ id: preorder.id })
+                          .assign({
+                              status: 'GAGAL',
+                              keterangan: trxRes.msg,
+                              updated_at: new Date().toISOString()
+                          })
+                          .write();
+                        continue;
+                    }
+
+                    // For other errors, log and keep as UNPROCESSED for retry
+                    logger.error(`Trx rejected for ${preorder.id}: ${trxRes.msg}`);
+                }
             } catch (error) {
                 logger.error(`Trx Gagal untuk ${preorder.id}:`, error.message);
-                // Keep it UNPROCESSED, Observer will update channel message to show any change if needed
             }
-        } else {
-            logger.debug(`Stok untuk ${preorder.kode_produk} kosong (0). Skip.`);
         }
     }
 }

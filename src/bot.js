@@ -340,7 +340,7 @@ bot.hears('📋 List', async (ctx) => {
             Markup.button.callback('🚀', `execmanual_${p.id}`)
         ];
         
-        if (p.status === 'ERROR') {
+        if (p.status === 'GAGAL') {
             row.push(Markup.button.callback('♻️', `retrybtn_${p.id}`));
         }
 
@@ -451,22 +451,60 @@ bot.action(/execmanual_(.+)/, async (ctx) => {
         const trxRes = await api.doTransaksi(p.kode_produk, p.nomor, p.reff_id);
         logger.info(`Manual Trx result for ${p.id}`, trxRes);
         
-        const isPeak = isPeakHour();
-        const firstDelay = isPeak ? 5000 : 10000;
+        if (trxRes.ok) {
+            const isPeak = isPeakHour();
+            const firstDelay = isPeak ? 5000 : 10000;
 
-        db.get('preorders')
-            .find({ id: p.id })
-            .assign({
-                status: 'EXECUTED',
-                attempted_stock: sisaSlot,
-                keterangan: 'Manual: ' + (trxRes.msg || trxRes.message || JSON.stringify(trxRes)),
-                updated_at: new Date().toISOString(),
-                next_status_check: Date.now() + firstDelay,
-                empty_check_count: 0
-            })
-            .write();
-        
-        ctx.reply(`🚀 Transaksi manual untuk ${p.nomor} terkirim. Status: EXECUTED.`);
+            db.get('preorders')
+                .find({ id: p.id })
+                .assign({
+                    status: 'EXECUTED',
+                    attempted_stock: sisaSlot,
+                    keterangan: 'Manual: ' + (trxRes.msg || 'Akan diproses'),
+                    updated_at: new Date().toISOString(),
+                    next_status_check: Date.now() + firstDelay,
+                    empty_check_count: 0
+                })
+                .write();
+            
+            ctx.reply(`🚀 Transaksi manual untuk ${p.nomor} terkirim. Status: EXECUTED.`);
+        } else {
+            const msg = (trxRes.msg || trxRes.error || '').toLowerCase();
+            if (msg.includes('rate_limited')) {
+                return ctx.reply('❌ Gagal: Terkena Rate Limit (4 trx/detik). Tunggu sebentar lagi.');
+            }
+            if (msg.includes('pending masih 2')) {
+                return ctx.reply('❌ Gagal: Maksimal 2 transaksi pending tercapai. Tunggu transaksi lain selesai.');
+            }
+            if (msg.includes('stok kosong')) {
+                const ghostLevels = db.get('ghost_levels').value() || {};
+                ghostLevels[p.kode_produk] = sisaSlot;
+                db.set('ghost_levels', ghostLevels).write();
+                
+                db.get('preorders')
+                  .find({ id: p.id })
+                  .assign({
+                      keterangan: `Ghost Stock terdeteksi: ${sisaSlot}.`,
+                      updated_at: new Date().toISOString()
+                  })
+                  .write();
+                return ctx.reply(`❌ Gagal: Server mengonfirmasi stok kosong (Ghost Stock @ ${sisaSlot}).`);
+            }
+
+            if (msg.includes('saldo tidak mencukupi')) {
+                db.get('preorders')
+                  .find({ id: p.id })
+                  .assign({
+                      status: 'GAGAL',
+                      keterangan: trxRes.msg,
+                      updated_at: new Date().toISOString()
+                  })
+                  .write();
+                return ctx.reply(`❌ Gagal: Saldo tidak mencukupi.`);
+            }
+
+            ctx.reply(`❌ Gagal mengeksekusi: ${trxRes.msg || trxRes.error}`);
+        }
 
     } catch (error) {
         logger.error(`Manual Trx failed for ${p.id}`, error.message);

@@ -15,18 +15,21 @@ function formatMessage(order) {
     let statusKet = '';
     const status = (order.status || '').toUpperCase();
 
-    if (status === 'SUCCESS') {
+    if (status === 'SUKSES') {
         statusEmoji = ' ✅';
         statusKet = 'Order selesai.';
-    } else if (status === 'ERROR' || status === 'GAGAL') {
+    } else if (status === 'GAGAL') {
         statusEmoji = ' ❌';
         statusKet = `⚠️ ${order.keterangan || 'Gagal'}`;
-    } else if (status === 'UNPROCESSED' || status === 'PENDING') {
+    } else if (status === 'UNPROCESSED') {
         statusEmoji = ' 🔄';
         statusKet = 'Menunggu stok.';
+    } else if (status === 'PENDING') {
+        statusEmoji = ' ⏳';
+        statusKet = 'Sedang diproses server...';
     } else if (status === 'EXECUTED') {
         statusEmoji = ' 🛄';
-        statusKet = 'Menunggu status transaksi dari web';
+        statusKet = 'Akan segera diproses';
     } else {
         statusEmoji = '';
         statusKet = order.keterangan || '-';
