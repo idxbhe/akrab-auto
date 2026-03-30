@@ -6,7 +6,7 @@ dotenv.config();
 const CHANNEL_ID = process.env.ADMIN_CHANNEL_ID;
 
 /**
- * Format message for Telegram Channel according to specific requirements
+ * Format message for Telegram Channel using pure HTML tags
  */
 function formatMessage(order) {
     const waktu = logger.formatDate(order.updated_at || order.created_at);
@@ -32,15 +32,17 @@ function formatMessage(order) {
         statusKet = order.keterangan || '-';
     }
 
-    // Alignment: "Nomor  :" is 8 chars, "Paket  :" is 8 chars, "Status :" is 8 chars
-    return `💳 ORDER <code>#${order.id}</code>${statusEmoji}\n` +
-           `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+    const separator = '━━━━━━━━━━━━━━━━━━━━━━━━━━';
+
+    // Alignment: Using <code> and <pre> for pure HTML formatting
+    return `💳 <b>ORDER <code>#${order.id}</code></b>${statusEmoji}\n` +
+           `<code>${separator}</code>\n` +
            `<code>Nomor  :</code> <code>${order.nomor}</code>\n` +
            `<code>Paket  :</code> <code>${order.nama_produk}</code>\n\n\n` +
            `<code>Status :</code> <code>${order.status}</code>\n` +
-           `\`\`\`\n${statusKet}\n\`\`\`\n` +
-           `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-           `🕒 <code>Update :</code> <code>${waktu}</code>`;
+           `<pre>${statusKet}</pre>\n` +
+           `<code>${separator}</code>\n` +
+           `🕒 <b>Update :</b> <code>${waktu}</code>`;
 }
 
 /**
@@ -91,7 +93,6 @@ async function deleteChannelMessage(bot, msgId) {
         await bot.telegram.deleteMessage(CHANNEL_ID, msgId);
         logger.info(`Channel message ${msgId} deleted because order was removed.`);
     } catch (err) {
-        // Just log, maybe message already deleted manually
         logger.warn(`Failed to delete channel message ${msgId}: ${err.message}`);
     }
 }
