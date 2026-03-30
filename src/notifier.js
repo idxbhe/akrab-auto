@@ -6,31 +6,41 @@ dotenv.config();
 const CHANNEL_ID = process.env.ADMIN_CHANNEL_ID;
 
 /**
- * Format message for Telegram Channel
- * Perfectly symmetric, monospace, and polished
+ * Format message for Telegram Channel according to specific requirements
  */
 function formatMessage(order) {
     const waktu = logger.formatDate(order.updated_at || order.created_at);
     
     let statusEmoji = '';
+    let statusKet = '';
     const status = (order.status || '').toUpperCase();
-    if (status === 'SUCCESS') statusEmoji = ' ✅';
-    else if (status === 'ERROR' || status === 'GAGAL') statusEmoji = ' ❌';
 
-    // Labels are exactly 7 characters + ": " = 9 characters total
-    // "Nomor  : "
-    // "Paket  : "
-    // "Status : "
-    // "Ket    : "
-    
-    return `<b>📑 ORDER <code>#${order.id}</code></b>\n` +
-           `<code>━━━━━━━━━━━━━━━━━━━━━━</code>\n` +
-           `<code>Nomor  : </code><code>${order.nomor}</code>\n` +
-           `<code>Paket  : </code><code>${order.nama_produk}</code>\n` +
-           `<code>Status : ${order.status}${statusEmoji}</code>\n` +
-           `<code>Ket    : ${order.keterangan || '-'}</code>\n` +
-           `<code>━━━━━━━━━━━━━━━━━━━━━━</code>\n` +
-           `🕒 <b>Update : <code>${waktu}</code></b>`;
+    if (status === 'SUCCESS') {
+        statusEmoji = ' ✅';
+        statusKet = 'Order selesai.';
+    } else if (status === 'ERROR' || status === 'GAGAL') {
+        statusEmoji = ' ❌';
+        statusKet = `⚠️ ${order.keterangan || 'Gagal'}`;
+    } else if (status === 'UNPROCESSED' || status === 'PENDING') {
+        statusEmoji = ' 🔄';
+        statusKet = 'Menunggu stok.';
+    } else if (status === 'EXECUTED') {
+        statusEmoji = ' 🛄';
+        statusKet = 'Menunggu status transaksi dari web';
+    } else {
+        statusEmoji = '';
+        statusKet = order.keterangan || '-';
+    }
+
+    // Alignment: "Nomor  :" is 8 chars, "Paket  :" is 8 chars, "Status :" is 8 chars
+    return `💳 ORDER <code>#${order.id}</code>${statusEmoji}\n` +
+           `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+           `<code>Nomor  :</code> <code>${order.nomor}</code>\n` +
+           `<code>Paket  :</code> <code>${order.nama_produk}</code>\n\n\n` +
+           `<code>Status :</code> <code>${order.status}</code>\n` +
+           `\`\`\`\n${statusKet}\n\`\`\`\n` +
+           `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+           `🕒 <code>Update :</code> <code>${waktu}</code>`;
 }
 
 /**
@@ -72,6 +82,20 @@ async function notifyOrderUpdate(bot, orderId) {
     }
 }
 
+/**
+ * Delete message from channel when order is deleted
+ */
+async function deleteChannelMessage(bot, msgId) {
+    if (!CHANNEL_ID || !msgId) return;
+    try {
+        await bot.telegram.deleteMessage(CHANNEL_ID, msgId);
+        logger.info(`Channel message ${msgId} deleted because order was removed.`);
+    } catch (err) {
+        // Just log, maybe message already deleted manually
+        logger.warn(`Failed to delete channel message ${msgId}: ${err.message}`);
+    }
+}
+
 function updateMsgId(orderId, msgId) {
     const inActive = db.get('preorders').find({ id: orderId }).value();
     if (inActive) {
@@ -84,4 +108,4 @@ function updateMsgId(orderId, msgId) {
     }
 }
 
-module.exports = { notifyOrderUpdate };
+module.exports = { notifyOrderUpdate, deleteChannelMessage };

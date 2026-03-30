@@ -1,16 +1,16 @@
 const { db, historyDb } = require('./db');
-const { notifyOrderUpdate } = require('./notifier');
+const { notifyOrderUpdate, deleteChannelMessage } = require('./notifier');
 const logger = require('./logger');
 
 /**
  * DB Observer - Zero-Touch Logic
- * Monitors database for changes and triggers notifications
+ * Monitors database for changes and triggers notifications or deletions
  */
 module.exports = (bot) => {
-    // Memory cache to track last known status and timestamp
-    const statusCache = new Map();
+    // Memory cache to track last known state
+    // Store: orderId -> { status, updatedAt, msgId }
+    const orderCache = new Map();
     
-    // Check interval (every 3 seconds)
     const INTERVAL = 3000;
     const CHANNEL_ID = process.env.ADMIN_CHANNEL_ID;
 
@@ -23,36 +23,60 @@ module.exports = (bot) => {
 
     async function check() {
         try {
-            // Check active preorders
             const preorders = db.get('preorders').value() || [];
             const history = historyDb.get('history').value() || [];
-            const allOrders = [...preorders, ...history];
+            const currentOrders = [...preorders, ...history];
+            
+            const currentOrderIds = new Set();
 
-            for (const order of allOrders) {
+            // 1. Check for new or updated orders
+            for (const order of currentOrders) {
+                currentOrderIds.add(order.id);
+                
                 const cacheKey = order.id;
                 const currentStatus = order.status;
                 const currentUpdatedAt = order.updated_at || order.created_at;
+                const currentMsgId = order.channel_msg_id;
                 
-                const cached = statusCache.get(cacheKey);
+                const cached = orderCache.get(cacheKey);
 
-                // If new order OR status changed OR timestamp updated
-                if (!cached || cached.status !== currentStatus || cached.updatedAt !== currentUpdatedAt) {
+                if (!cached || cached.status !== currentStatus || cached.updatedAt !== currentUpdatedAt || cached.msgId !== currentMsgId) {
                     
-                    // Skip notification for very old history orders on startup
+                    // Skip notification for very old history orders on startup to avoid spam
                     const isNewOrRecent = !cached || (Date.now() - new Date(currentUpdatedAt).getTime() < 60000);
                     
                     if (isNewOrRecent) {
-                        logger.debug(`Observer: Order ${order.id} status changed to ${currentStatus}. Notifying channel...`);
+                        logger.debug(`Observer: Order ${order.id} update detected. Notifying channel...`);
                         await notifyOrderUpdate(bot, order.id);
                     }
 
-                    // Update cache
-                    statusCache.set(cacheKey, {
+                    // Refresh cache with latest data from DB (including potential new msgId)
+                    const updatedOrder = [...db.get('preorders').value(), ...historyDb.get('history').value()].find(o => o.id === order.id);
+                    
+                    orderCache.set(cacheKey, {
                         status: currentStatus,
-                        updatedAt: currentUpdatedAt
+                        updatedAt: currentUpdatedAt,
+                        msgId: updatedOrder ? updatedOrder.channel_msg_id : currentMsgId
                     });
                 }
             }
+
+            // 2. Check for deleted orders
+            for (const [cachedId, cachedData] of orderCache.entries()) {
+                if (!currentOrderIds.has(cachedId)) {
+                    logger.info(`Observer: Order ${cachedId} was deleted from database.`);
+                    
+                    // If it had a channel message, delete it
+                    if (cachedData.msgId) {
+                        logger.info(`Observer: Deleting channel message ${cachedData.msgId} for deleted order ${cachedId}`);
+                        await deleteChannelMessage(bot, cachedData.msgId);
+                    }
+                    
+                    // Remove from cache
+                    orderCache.delete(cachedId);
+                }
+            }
+            
         } catch (err) {
             logger.error('Observer: Error in check cycle', err.message);
         } finally {
@@ -60,6 +84,5 @@ module.exports = (bot) => {
         }
     }
 
-    // Start the loop
     check();
 };
