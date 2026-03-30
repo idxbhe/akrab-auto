@@ -24,7 +24,8 @@ module.exports = (bot) => {
     async function check() {
         try {
             const preorders = db.get('preorders').value() || [];
-            const history = historyDb.get('history').value() || [];
+            // Limit history check to last 50 entries to save resources
+            const history = historyDb.get('history').takeRight(50).value() || [];
             const currentOrders = [...preorders, ...history];
             
             const currentOrderIds = new Set();

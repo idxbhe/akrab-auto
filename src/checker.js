@@ -71,15 +71,7 @@ async function checkAndProcess(bot) {
                             .write();
                         
                         logger.info(`Order ${order.id} updated to ${finalStatus} via auto-history check. Ket: ${hData.keterangan}`);
-                        const notifyMsg = `🔔 <b>STATUS UPDATE (AUTO CHECK)</b>\n\n` +
-                                          `<code>ID      : ${order.id}</code>\n` +
-                                          `<code>Nomor   : ${order.nomor}</code>\n` +
-                                          `<code>Paket   : ${order.nama_produk}</code>\n` +
-                                          `<code>Status  : ${finalStatus}</code>\n` +
-                                          `<code>Ket     : ${hData.keterangan || statusText}</code>\n` +
-                                          `---------------------------------------------------------\n` +
-                                          `Waktu   : ${logger.formatDate(new Date().toISOString())}`;
-                        broadcastToAdmins(bot, notifyMsg);
+                        // Notification to channel handled by Observer via notifyOrderUpdate
 
                         if (finalStatus === 'SUCCESS') {
                             const completedOrder = db.get('preorders').find({ id: order.id }).value();
@@ -122,15 +114,6 @@ async function checkAndProcess(bot) {
                             .write();
                         
                         logger.error(`Ghost Stock detected for order ${order.id} at level ${attemptedStock}. Reverting to UNPROCESSED.`);
-                        const notifyMsg = `⚠️ <b>GHOST STOCK TERDETEKSI</b>\n\n` +
-                                          `<code>ID      : ${order.id}</code>\n` +
-                                          `<code>Nomor   : ${order.nomor}</code>\n` +
-                                          `<code>Paket   : ${order.nama_produk}</code>\n` +
-                                          `<code>Level   : ${attemptedStock}</code>\n` +
-                                          `---------------------------------------------------------\n` +
-                                          `Waktu   : ${logger.formatDate(new Date().toISOString())}\n\n` +
-                                          `<i>Sistem akan mengabaikan stok ini sampai jumlah stok bertambah.</i>`;
-                        broadcastToAdmins(bot, notifyMsg);
                     } else {
                         db.get('preorders')
                           .find({ id: order.id })
@@ -219,16 +202,6 @@ async function checkAndProcess(bot) {
 
             logger.info(`EKSEKUSI OTOMATIS: ${preorder.nomor} (${preorder.kode_produk}) - Slot: ${sisaSlot}`);
             
-            const startNotifyMsg = `🔔 <b>MEMULAI TRANSAKSI OTOMATIS</b>\n\n` +
-                                   `<code>ID      : ${preorder.id}</code>\n` +
-                                   `<code>Nomor   : ${preorder.nomor}</code>\n` +
-                                   `<code>Paket   : ${preorder.nama_produk}</code>\n` +
-                                   `<code>Reff ID : ${preorder.reff_id}</code>\n` +
-                                   `<code>Level   : ${sisaSlot}</code>\n` +
-                                   `---------------------------------------------------------\n` +
-                                   `Waktu   : ${logger.formatDate(new Date().toISOString())}`;
-            broadcastToAdmins(bot, startNotifyMsg);
-
             try {
                 const trxRes = await api.doTransaksi(preorder.kode_produk, preorder.nomor, preorder.reff_id);
                 logger.info(`Hasil Trx ${preorder.id}:`, trxRes);
@@ -248,31 +221,18 @@ async function checkAndProcess(bot) {
                   })
                   .write();
                   
-                const execNotifyMsg = `🚀 <b>TRANSAKSI TEREKSEKUSI</b>\n\n` +
-                                      `<code>ID      : ${preorder.id}</code>\n` +
-                                      `<code>Nomor   : ${preorder.nomor}</code>\n` +
-                                      `<code>Status  : EXECUTED</code>\n` +
-                                      `---------------------------------------------------------\n` +
-                                      `Waktu   : ${logger.formatDate(new Date().toISOString())}\n\n` +
-                                      `<i>Menunggu pengecekan otomatis dalam ${firstDelay/1000} detik...</i>`;
-                broadcastToAdmins(bot, execNotifyMsg);
+                logger.info(`Order ${preorder.id} set to EXECUTED. Waiting for Observer to update channel.`);
 
             } catch (error) {
                 logger.error(`Trx Gagal untuk ${preorder.id}:`, error.message);
-                const failNotifyMsg = `❌ <b>KONEKSI GAGAL SAAT TRANSAKSI</b>\n\n` +
-                                      `<code>ID      : ${preorder.id}</code>\n` +
-                                      `<code>Nomor   : ${preorder.nomor}</code>\n` +
-                                      `<code>Error   : ${error.message}</code>\n` +
-                                      `---------------------------------------------------------\n` +
-                                      `Waktu   : ${logger.formatDate(new Date().toISOString())}\n\n` +
-                                      `<i>Status tetap UNPROCESSED.</i>`;
-                broadcastToAdmins(bot, failNotifyMsg);
+                // Keep it UNPROCESSED, Observer will update channel message to show any change if needed
             }
         } else {
             logger.debug(`Stok untuk ${preorder.kode_produk} kosong (0). Skip.`);
         }
     }
 }
+
 
 function broadcastToAdmins(bot, message) {
     const adminChatIds = db.get('admin_chats').value() || [];

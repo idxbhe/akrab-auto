@@ -466,14 +466,7 @@ bot.action(/execmanual_(.+)/, async (ctx) => {
             })
             .write();
         
-        const execNotifyMsg = `🚀 <b>TRANSAKSI MANUAL TERKIRIM</b>\n\n` +
-                              `<code>ID      : ${p.id}</code>\n` +
-                              `<code>Nomor   : ${p.nomor}</code>\n` +
-                              `<code>Status  : EXECUTED</code>\n` +
-                              `---------------------------------------------------------\n` +
-                              `Waktu   : ${logger.formatDate(new Date().toISOString())}\n\n` +
-                              `<i>Menunggu pengecekan otomatis dalam ${firstDelay/1000} detik...</i>`;
-        ctx.reply(execNotifyMsg, { parse_mode: 'HTML' });
+        ctx.reply(`🚀 Transaksi manual untuk ${p.nomor} terkirim. Status: EXECUTED.`);
 
     } catch (error) {
         logger.error(`Manual Trx failed for ${p.id}`, error.message);
