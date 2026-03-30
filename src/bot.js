@@ -1,4 +1,5 @@
 const { Telegraf, Scenes, session, Markup } = require('telegraf');
+const { startChecker, broadcastToAdmins, isPeakHour } = require('./checker');
 const { db, historyDb } = require('./db');
 const logger = require('./logger');
 const api = require('./api');
@@ -450,6 +451,9 @@ bot.action(/execmanual_(.+)/, async (ctx) => {
         const trxRes = await api.doTransaksi(p.kode_produk, p.nomor, p.reff_id);
         logger.info(`Manual Trx result for ${p.id}`, trxRes);
         
+        const isPeak = isPeakHour();
+        const firstDelay = isPeak ? 5000 : 10000;
+
         db.get('preorders')
             .find({ id: p.id })
             .assign({
@@ -457,7 +461,7 @@ bot.action(/execmanual_(.+)/, async (ctx) => {
                 attempted_stock: sisaSlot,
                 keterangan: 'Manual: ' + (trxRes.msg || trxRes.message || JSON.stringify(trxRes)),
                 updated_at: new Date().toISOString(),
-                next_status_check: Date.now() + 10000,
+                next_status_check: Date.now() + firstDelay,
                 empty_check_count: 0
             })
             .write();
@@ -468,7 +472,7 @@ bot.action(/execmanual_(.+)/, async (ctx) => {
                               `<code>Status  : EXECUTED</code>\n` +
                               `---------------------------------------------------------\n` +
                               `Waktu   : ${logger.formatDate(new Date().toISOString())}\n\n` +
-                              `<i>Menunggu pengecekan otomatis...</i>`;
+                              `<i>Menunggu pengecekan otomatis dalam ${firstDelay/1000} detik...</i>`;
         ctx.reply(execNotifyMsg, { parse_mode: 'HTML' });
 
     } catch (error) {

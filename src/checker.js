@@ -2,18 +2,28 @@ const api = require('./api');
 const { db, historyDb } = require('./db');
 const logger = require('./logger');
 
+function isPeakHour() {
+    const now = new Date();
+    const hour = now.getHours();
+    return hour >= 8 && hour < 12;
+}
+
 function startChecker(bot, intervalMs = 10000) {
-    logger.info(`Checker started with interval: ${intervalMs}ms`);
+    logger.info(`Checker started with base interval: ${intervalMs}ms`);
     
     async function run() {
         try {
-            logger.debug('--- MEMULAI SIKLUS PENGECEKAN STOK ---');
+            const isPeak = isPeakHour();
+            const currentInterval = isPeak ? Math.floor(intervalMs / 2) : intervalMs;
+            
+            logger.debug(`--- MEMULAI SIKLUS PENGECEKAN STOK (${isPeak ? 'PEAK HOUR' : 'NORMAL'}) ---`);
             await checkAndProcess(bot);
+            
+            logger.debug(`Siklus selesai. Cek selanjutnya dalam ${currentInterval / 1000} detik...`);
+            setTimeout(run, currentInterval);
         } catch (err) {
             logger.error('Checker CRITICAL error in run():', err.message);
-        } finally {
-            logger.debug(`Siklus selesai. Cek selanjutnya dalam ${intervalMs / 1000} detik...`);
-            setTimeout(run, intervalMs);
+            setTimeout(run, intervalMs); // Fallback to base interval on error
         }
     }
     
@@ -23,6 +33,7 @@ function startChecker(bot, intervalMs = 10000) {
 async function checkAndProcess(bot) {
     const preorders = db.get('preorders').value() || [];
     const now = Date.now();
+    const isPeak = isPeakHour();
     
     // 1. Cek status order yang EXECUTED menggunakan /history
     const executedOrders = preorders.filter(p => p.status === 'EXECUTED');
@@ -76,11 +87,11 @@ async function checkAndProcess(bot) {
                             db.get('preorders').remove({ id: order.id }).write();
                         }
                     } else {
-                        logger.info(`Order ${order.id} masih ${statusText} di server. Pengecekan ulang dalam 1 menit.`);
+                        logger.info(`Order ${order.id} masih ${statusText} di server. Pengecekan ulang dalam 10 detik.`);
                         db.get('preorders')
                           .find({ id: order.id })
                           .assign({
-                              next_status_check: now + 60000,
+                              next_status_check: now + 10000,
                               empty_check_count: 0 // Reset empty count because data was found
                           })
                           .write();
@@ -88,9 +99,9 @@ async function checkAndProcess(bot) {
                 } else {
                     // Data is empty
                     const newEmptyCount = (order.empty_check_count || 0) + 1;
-                    logger.warn(`Order ${order.id} tidak ditemukan di history server (${newEmptyCount}/3).`);
+                    logger.warn(`Order ${order.id} tidak ditemukan di history server (${newEmptyCount}/6).`);
 
-                    if (newEmptyCount >= 3) {
+                    if (newEmptyCount >= 6) {
                         const attemptedStock = order.attempted_stock || 0;
                         const kodeProduk = order.kode_produk;
                         
@@ -124,19 +135,19 @@ async function checkAndProcess(bot) {
                         db.get('preorders')
                           .find({ id: order.id })
                           .assign({
-                              next_status_check: now + 60000,
+                              next_status_check: now + 10000,
                               empty_check_count: newEmptyCount
                           })
                           .write();
-                        logger.info(`Order ${order.id} dijadwalkan ulang dalam 1 menit.`);
+                        logger.info(`Order ${order.id} dijadwalkan ulang dalam 10 detik.`);
                     }
                 }
             } catch (err) {
                 logger.error(`Failed to check history for order ${order.id}: ${err.message}`);
-                // Retry in 1 minute on network error
+                // Retry in 10s on network error
                 db.get('preorders')
                   .find({ id: order.id })
-                  .assign({ next_status_check: now + 60000 })
+                  .assign({ next_status_check: now + 10000 })
                   .write();
             }
         }
@@ -222,6 +233,9 @@ async function checkAndProcess(bot) {
                 const trxRes = await api.doTransaksi(preorder.kode_produk, preorder.nomor, preorder.reff_id);
                 logger.info(`Hasil Trx ${preorder.id}:`, trxRes);
                 
+                // First check after execution: 5s if peak hour, else 10s
+                const firstDelay = isPeak ? 5000 : 10000;
+
                 db.get('preorders')
                   .find({ id: preorder.id })
                   .assign({
@@ -229,7 +243,7 @@ async function checkAndProcess(bot) {
                       attempted_stock: sisaSlot,
                       keterangan: 'Auto: ' + (trxRes.msg || trxRes.message || JSON.stringify(trxRes)),
                       updated_at: new Date().toISOString(),
-                      next_status_check: Date.now() + 10000,
+                      next_status_check: Date.now() + firstDelay,
                       empty_check_count: 0
                   })
                   .write();
@@ -240,7 +254,7 @@ async function checkAndProcess(bot) {
                                       `<code>Status  : EXECUTED</code>\n` +
                                       `---------------------------------------------------------\n` +
                                       `Waktu   : ${logger.formatDate(new Date().toISOString())}\n\n` +
-                                      `<i>Menunggu pengecekan otomatis dalam 10 detik...</i>`;
+                                      `<i>Menunggu pengecekan otomatis dalam ${firstDelay/1000} detik...</i>`;
                 broadcastToAdmins(bot, execNotifyMsg);
 
             } catch (error) {
@@ -272,5 +286,7 @@ function broadcastToAdmins(bot, message) {
 
 module.exports = {
     startChecker,
-    broadcastToAdmins
+    broadcastToAdmins,
+    isPeakHour
 };
+
