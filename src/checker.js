@@ -154,6 +154,14 @@ async function checkAndProcess(bot) {
     }
 
     const currentPreorders = db.get('preorders').value() || [];
+    
+    // Proactive Pending Guard: Cek antrean aktif di lokal
+    const activeOrders = currentPreorders.filter(p => p.status === 'EXECUTED' || p.status === 'PENDING');
+    if (activeOrders.length >= 2) {
+        logger.debug(`Batas pending tercapai (${activeOrders.length}). Menunda eksekusi UNPROCESSED.`);
+        return;
+    }
+
     const unprocessedOrders = currentPreorders.filter(p => p.status === 'UNPROCESSED' || p.status === 'pending');
 
     if (unprocessedOrders.length === 0) {

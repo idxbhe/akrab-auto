@@ -353,9 +353,14 @@ bot.hears('📋 List', async (ctx) => {
     ctx.reply('📋 <b>Daftar Pre-Order:</b>', { parse_mode: 'HTML', ...mainMenu });
     
     for (const p of preorders) {
-        let msg = `\`Nomor  :\` \`${p.nomor}\`\n`;
-        msg += `\`Paket  :\` \`${p.nama_produk}\` (\`${p.kode_produk}\`)\n`;
-        msg += `\`Status :\` \`${p.status}\`\n`;
+        let msg = `<code>Nomor  :</code> <code>${p.nomor}</code>\n`;
+        msg += `<code>Paket  :</code> <code>${p.nama_produk} (${p.kode_produk})</code>\n`;
+        msg += `<code>Status :</code> <code>${p.status}</code>\n`;
+        
+        if (p.status === 'GAGAL') {
+            msg += `<pre>⚠ ${p.keterangan || 'Gagal tanpa alasan'}</pre>\n`;
+        }
+        
         msg += `---------------------------------------------------------`;
         
         const row = [
@@ -372,7 +377,7 @@ bot.hears('📋 List', async (ctx) => {
         row.push(Markup.button.callback('🗑️', `deletebtn_${p.id}`));
 
         const buttons = Markup.inlineKeyboard([row]);
-        await ctx.reply(msg, { parse_mode: 'Markdown', ...buttons });
+        await ctx.reply(msg, { parse_mode: 'HTML', ...buttons });
     }
 });
 
