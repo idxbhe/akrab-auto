@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { startChecker, broadcastToAdmins, isPeakHour } = require('./checker');
 const { db, historyDb } = require('./db');
+const { generateReffId } = require('./utils');
 const logger = require('./logger');
 const api = require('./api');
 const dotenv = require('dotenv');
@@ -16,11 +17,6 @@ const PRODUCTS = [
     { type: 'XLA65', nama: 'JUMBO', sisa_slot: 0 },
     { type: 'XLA89', nama: 'MegaBig', sisa_slot: 0 }
 ];
-
-function generateReffId(nomor, kode_produk, nama_produk) {
-    const uid = Math.random().toString(36).substring(2, 8);
-    return `${nomor}-${kode_produk}-${nama_produk.replace(/\s+/g, '')}-${uid}`;
-}
 
 const mainMenu = Markup.keyboard([
     ['➕ Tambah', '📋 List'],

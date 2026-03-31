@@ -1,5 +1,6 @@
 const api = require('./api');
 const { db, historyDb } = require('./db');
+const { generateReffId } = require('./utils');
 const logger = require('./logger');
 
 function isPeakHour() {
@@ -51,6 +52,38 @@ async function checkAndProcess(bot) {
                 const historyRes = await api.cekHistory(order.reff_id);
                 if (historyRes && historyRes.ok && Array.isArray(historyRes.data) && historyRes.data.length > 0) {
                     const hData = historyRes.data[0];
+                    const keterangan = (hData.keterangan || '').toUpperCase();
+
+                    // Penanganan khusus HTTP_CLIENT_RESPONSE_BODY_ERR
+                    if (keterangan.includes('HTTP_CLIENT_RESPONSE_BODY_ERR')) {
+                        const errCount = (order.http_err_count || 0) + 1;
+                        if (errCount === 1) {
+                            logger.warn(`Order ${order.id} mendapat HTTP_CLIENT_RESPONSE_BODY_ERR. Menunggu 5 detik untuk cek ulang.`);
+                            db.get('preorders').find({ id: order.id }).assign({
+                                http_err_count: 1,
+                                next_status_check: now + 5000
+                            }).write();
+                            continue; 
+                        } else {
+                            // Pengecekan kedua masih error, reset ke UNPROCESSED
+                            logger.error(`Order ${order.id} masih HTTP_CLIENT_RESPONSE_BODY_ERR. Auto-retry (Reset ke UNPROCESSED).`);
+                            const newReffId = generateReffId(order.nomor, order.kode_produk, order.nama_produk);
+                            db.get('preorders').find({ id: order.id }).assign({
+                                status: 'UNPROCESSED',
+                                reff_id: newReffId,
+                                keterangan: 'Auto-retry: HTTP_CLIENT_ERR',
+                                updated_at: new Date().toISOString(),
+                                next_status_check: 0,
+                                empty_check_count: 0,
+                                http_err_count: 0
+                            }).write();
+                            continue;
+                        }
+                    } else if (order.http_err_count) {
+                        // Reset jika error sudah hilang
+                        db.get('preorders').find({ id: order.id }).assign({ http_err_count: 0 }).write();
+                    }
+
                     const statusText = (hData.status_text || '').toUpperCase();
                     let finalStatus = null;
 
