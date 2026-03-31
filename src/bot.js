@@ -1,4 +1,6 @@
 const { Telegraf, Scenes, session, Markup } = require('telegraf');
+const fs = require('fs');
+const path = require('path');
 const { startChecker, broadcastToAdmins, isPeakHour } = require('./checker');
 const { db, historyDb } = require('./db');
 const logger = require('./logger');
@@ -627,5 +629,27 @@ bot.command('list', (ctx) => bot.handleUpdate({ ...ctx.update, message: { text: 
 bot.command('hapus', (ctx) => ctx.scene.enter('delete-preorder'));
 bot.command('edit', (ctx) => ctx.scene.enter('edit-preorder'));
 bot.command('history', (ctx) => bot.handleUpdate({ ...ctx.update, message: { text: '📜 History' } }));
+
+bot.command('exportlog', async (ctx) => {
+    const botLogPath = path.join(__dirname, '..', 'bot.log');
+    const apiLogPath = path.join(__dirname, '..', 'api.log');
+    
+    try {
+        if (fs.existsSync(botLogPath)) {
+            await ctx.replyWithDocument({ source: botLogPath });
+        } else {
+            await ctx.reply('❌ File bot.log tidak ditemukan.');
+        }
+
+        if (fs.existsSync(apiLogPath)) {
+            await ctx.replyWithDocument({ source: apiLogPath });
+        } else {
+            await ctx.reply('❌ File api.log tidak ditemukan.');
+        }
+    } catch (err) {
+        logger.error('Failed to export logs', err.message);
+        ctx.reply('❌ Gagal mengeksport log: ' + err.message);
+    }
+});
 
 module.exports = bot;
