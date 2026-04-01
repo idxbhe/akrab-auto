@@ -39,12 +39,12 @@ function log(level, message, data = null) {
     return;
   }
 
-  const timestamp = new Date().toISOString();
+  const timestamp = formatDate(new Date());
   let logStr = `[${timestamp}] [${level}] ${message}`;
   if (data) {
     const safeData = maskData(data);
     if (typeof safeData === 'object') {
-        logStr += ` ${JSON.stringify(safeData)}`;
+        logStr += `\n${JSON.stringify(safeData, null, 2)}`;
     } else {
         logStr += ` ${safeData}`;
     }
@@ -59,12 +59,12 @@ function log(level, message, data = null) {
 }
 
 function logApi(action, data = null) {
-  const timestamp = new Date().toISOString();
+  const timestamp = formatDate(new Date());
   let logStr = `[${timestamp}] [API] [${action}]`;
   if (data) {
     const safeData = maskData(data);
     if (typeof safeData === 'object') {
-        logStr += ` ${JSON.stringify(safeData)}`;
+        logStr += `\n${JSON.stringify(safeData, null, 2)}`;
     } else {
         logStr += ` ${safeData}`;
     }
@@ -90,9 +90,8 @@ function formatDate(isoString) {
   const year = d.getFullYear();
   const hours = pad(d.getHours());
   const minutes = pad(d.getMinutes());
-  const seconds = pad(d.getSeconds());
   
-  return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
+  return `${day}:${month}:${year} - ${hours}:${minutes}`;
 }
 
 module.exports = {
