@@ -401,14 +401,22 @@ bot.hears('📦 Cek Stok', async (ctx) => {
         const stockRes = await api.cekStock();
         const stocks = stockRes.data;
         const ghostLevels = db.get('ghost_levels').value() || {};
+        let ghostChanged = false;
         
         let msg = '📦 <b>Status Stok Akrab:</b>\n\n';
         if (stocks && Array.isArray(stocks) && stocks.length > 0) {
             PRODUCTS.forEach(p => {
                 const stockData = stocks.find(s => s.type === p.type);
                 const sisa = stockData ? (stockData.sisa_slot || stockData.stok || stockData.stock || 0) : 0;
-                const ghostLevel = ghostLevels[p.type] || 0;
+                let ghostLevel = ghostLevels[p.type] || 0;
                 
+                // Sync ghost level: remove if current stock changed
+                if (ghostLevel > 0 && sisa !== ghostLevel) {
+                    delete ghostLevels[p.type];
+                    ghostLevel = 0;
+                    ghostChanged = true;
+                }
+
                 // Align names by padding them to a fixed width
                 const paddedName = p.nama.padEnd(10, ' ');
                 let line = `- <code>${paddedName} : ${sisa} slot</code>`;
@@ -417,6 +425,11 @@ bot.hears('📦 Cek Stok', async (ctx) => {
                 }
                 msg += line + '\n';
             });
+
+            if (ghostChanged) {
+                db.set('ghost_levels', ghostLevels).write();
+            }
+
             msg += '\n<pre>Catatan:\nJika angka stok sama dengan Ghost,\nbot akan melewati eksekusi.</pre>';
         } else {
             msg += 'Data stok tidak ditemukan atau kosong.';
@@ -496,6 +509,13 @@ bot.action(/execmanual_(.+)/, async (ctx) => {
                     empty_check_count: 0
                 })
                 .write();
+            
+            // Clear ghost level on successful transaction
+            const updatedGhostLevels = db.get('ghost_levels').value() || {};
+            if (updatedGhostLevels[p.kode_produk]) {
+                delete updatedGhostLevels[p.kode_produk];
+                db.set('ghost_levels', updatedGhostLevels).write();
+            }
             
             // Auto-resume if successful
             const config = db.get('system_config').value() || { is_paused: false };

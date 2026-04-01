@@ -232,12 +232,14 @@ async function checkAndProcess(bot) {
         
         const ghostLevels = db.get('ghost_levels').value() || {};
         const kodeProduk = preorder.kode_produk;
-        if (sisaSlot === 0 && ghostLevels[kodeProduk]) {
-            ghostLevels[kodeProduk] = 0;
+        const currentGhostLevel = ghostLevels[kodeProduk] || 0;
+
+        // Reset ghost level if current stock is different from the ghost level (higher/lower/zero)
+        if (currentGhostLevel > 0 && sisaSlot !== currentGhostLevel) {
+            delete ghostLevels[kodeProduk];
             db.set('ghost_levels', ghostLevels).write();
         }
 
-        const currentGhostLevel = ghostLevels[kodeProduk] || 0;
         if (sisaSlot > 0) {
             if (sisaSlot === currentGhostLevel) {
                 continue;
@@ -262,6 +264,13 @@ async function checkAndProcess(bot) {
                           empty_check_count: 0
                       })
                       .write();
+                    
+                    // Clear ghost level on successful transaction
+                    const updatedGhostLevels = db.get('ghost_levels').value() || {};
+                    if (updatedGhostLevels[kodeProduk]) {
+                        delete updatedGhostLevels[kodeProduk];
+                        db.set('ghost_levels', updatedGhostLevels).write();
+                    }
                 } else {
                     const msg = (trxRes.msg || trxRes.error || '').toLowerCase();
                     
