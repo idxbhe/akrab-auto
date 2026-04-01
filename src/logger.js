@@ -1,8 +1,14 @@
 const fs = require('fs');
 const path = require('path');
 
-const logFile = path.join(__dirname, '..', 'bot.log');
-const apiLogFile = path.join(__dirname, '..', 'api.log');
+// Ensure logs directory exists (Deployment-Ready)
+const logsDir = path.join(__dirname, '..', 'logs');
+if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+}
+
+const logFile = path.join(logsDir, 'bot.log');
+const apiLogFile = path.join(logsDir, 'api.log');
 
 /**
  * Mask sensitive data like api_key from logs
@@ -65,6 +71,7 @@ function logApi(action, data = null) {
   }
   logStr += '\n';
 
+  console.log(logStr.trim());
   // Asynchronous write (non-blocking)
   fs.appendFile(apiLogFile, logStr, (err) => {
       if (err) console.error('Failed to write to API log file', err);

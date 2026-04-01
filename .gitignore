@@ -13,3 +13,5 @@ history.db
 .real.env
 api.log
 idea.md
+logs/
+data/

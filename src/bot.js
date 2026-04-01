@@ -652,8 +652,8 @@ bot.command('edit', (ctx) => ctx.scene.enter('edit-preorder'));
 bot.command('history', (ctx) => bot.handleUpdate({ ...ctx.update, message: { text: '📜 History' } }));
 
 bot.command('exportlog', async (ctx) => {
-    const botLogPath = path.join(__dirname, '..', 'bot.log');
-    const apiLogPath = path.join(__dirname, '..', 'api.log');
+    const botLogPath = path.join(__dirname, '..', 'logs', 'bot.log');
+    const apiLogPath = path.join(__dirname, '..', 'logs', 'api.log');
     
     try {
         if (fs.existsSync(botLogPath)) {
