@@ -8,6 +8,55 @@ const TOPIC_ID = process.env.ADMIN_TOPIC_ID ? Number(process.env.ADMIN_TOPIC_ID)
 const API_LOG_TOPIC_ID = process.env.ADMIN_API_LOG_TOPIC_ID ? Number(process.env.ADMIN_API_LOG_TOPIC_ID) : null;
 
 /**
+ * Telegram Message Queue to handle rate limits (429)
+ */
+class TelegramQueue {
+    constructor() {
+        this.queue = [];
+        this.isProcessing = false;
+        this.delay = 50; // Base delay between messages in ms
+    }
+
+    async push(task) {
+        return new Promise((resolve, reject) => {
+            this.queue.push({ task, resolve, reject });
+            this.process();
+        });
+    }
+
+    async process() {
+        if (this.isProcessing || this.queue.length === 0) return;
+        this.isProcessing = true;
+
+        while (this.queue.length > 0) {
+            const { task, resolve, reject } = this.queue.shift();
+            try {
+                const result = await task();
+                resolve(result);
+                await new Promise(r => setTimeout(r, this.delay));
+            } catch (err) {
+                if (err.response && err.response.error_code === 429) {
+                    const retryAfter = (err.response.parameters.retry_after || 1) * 1000;
+                    logger.warn(`Telegram Rate Limit (429). Waiting ${retryAfter}ms...`);
+                    
+                    // Put task back to front
+                    this.queue.unshift({ task, resolve, reject });
+                    
+                    await new Promise(r => setTimeout(r, retryAfter));
+                    // Continue loop
+                } else {
+                    reject(err);
+                }
+            }
+        }
+
+        this.isProcessing = false;
+    }
+}
+
+const queue = new TelegramQueue();
+
+/**
  * Format message for Telegram Channel using pure HTML tags
  */
 function formatMessage(order) {
@@ -74,11 +123,11 @@ async function notifyOrderUpdate(bot, orderId) {
 
         if (msgId) {
             try {
-                await bot.telegram.editMessageText(CHANNEL_ID, msgId, null, text, { parse_mode: 'HTML' });
+                await queue.push(() => bot.telegram.editMessageText(CHANNEL_ID, msgId, null, text, { parse_mode: 'HTML' }));
             } catch (err) {
                 if (err.description && (err.description.includes('message to edit not found') || err.description.includes('message can\'t be edited'))) {
                     // Try to send new message to the (potentially new) channel/topic
-                    const newMsg = await bot.telegram.sendMessage(CHANNEL_ID, text, extra);
+                    const newMsg = await queue.push(() => bot.telegram.sendMessage(CHANNEL_ID, text, extra));
                     updateMsgId(order.id, newMsg.message_id);
                 } else if (err.description && err.description.includes('message is not modified')) {
                     // Ignore
@@ -87,7 +136,7 @@ async function notifyOrderUpdate(bot, orderId) {
                 }
             }
         } else {
-            const newMsg = await bot.telegram.sendMessage(CHANNEL_ID, text, extra);
+            const newMsg = await queue.push(() => bot.telegram.sendMessage(CHANNEL_ID, text, extra));
             updateMsgId(order.id, newMsg.message_id);
         }
     } catch (err) {
@@ -112,10 +161,10 @@ async function notifyApiLogRequest(bot, config) {
                      `<b>URL:</b> <code>${config.url}</code>\n` +
                      `<b>Params:</b>\n<pre>${params}</pre>`;
 
-        const msg = await bot.telegram.sendMessage(CHANNEL_ID, text, {
+        const msg = await queue.push(() => bot.telegram.sendMessage(CHANNEL_ID, text, {
             parse_mode: 'HTML',
             message_thread_id: API_LOG_TOPIC_ID
-        });
+        }));
         return msg.message_id;
     } catch (err) {
         logger.error('Failed to send API Request Log', err.message);
@@ -142,11 +191,11 @@ async function notifyApiLogResponse(bot, response, requestMsgPromise) {
                      `---------------------------\n` +
                      `<pre>${data}</pre>`;
 
-        await bot.telegram.sendMessage(CHANNEL_ID, text, {
+        await queue.push(() => bot.telegram.sendMessage(CHANNEL_ID, text, {
             parse_mode: 'HTML',
             message_thread_id: API_LOG_TOPIC_ID,
             reply_to_message_id: replyToId
-        });
+        }));
     } catch (err) {
         logger.error('Failed to send API Response Log', err.message);
     }
@@ -158,7 +207,7 @@ async function notifyApiLogResponse(bot, response, requestMsgPromise) {
 async function deleteChannelMessage(bot, msgId) {
     if (!CHANNEL_ID || !msgId) return;
     try {
-        await bot.telegram.deleteMessage(CHANNEL_ID, msgId);
+        await queue.push(() => bot.telegram.deleteMessage(CHANNEL_ID, msgId));
         logger.info(`Channel message ${msgId} deleted because order was removed.`);
     } catch (err) {
         logger.warn(`Failed to delete channel message ${msgId}: ${err.message}`);
