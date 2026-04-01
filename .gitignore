@@ -12,3 +12,4 @@ history.db
 .geminiignore
 .real.env
 api.log
+idea.md

@@ -5,6 +5,7 @@ dotenv.config();
 
 const CHANNEL_ID = process.env.ADMIN_CHANNEL_ID;
 const TOPIC_ID = process.env.ADMIN_TOPIC_ID ? Number(process.env.ADMIN_TOPIC_ID) : null;
+const API_LOG_TOPIC_ID = process.env.ADMIN_API_LOG_TOPIC_ID ? Number(process.env.ADMIN_API_LOG_TOPIC_ID) : null;
 
 /**
  * Format message for Telegram Channel using pure HTML tags
@@ -95,6 +96,63 @@ async function notifyOrderUpdate(bot, orderId) {
 }
 
 /**
+ * Send API Request Log
+ */
+async function notifyApiLogRequest(bot, config) {
+    if (!CHANNEL_ID || !API_LOG_TOPIC_ID) return null;
+
+    try {
+        const waktu = logger.formatDate(new Date().toISOString());
+        const params = config.params ? JSON.stringify(config.params, null, 2) : '-';
+        
+        const text = `🚀 <b>API REQUEST</b>\n` +
+                     `<code>${waktu}</code>\n` +
+                     `---------------------------\n` +
+                     `<b>Method:</b> <code>${(config.method || 'GET').toUpperCase()}</code>\n` +
+                     `<b>URL:</b> <code>${config.url}</code>\n` +
+                     `<b>Params:</b>\n<pre>${params}</pre>`;
+
+        const msg = await bot.telegram.sendMessage(CHANNEL_ID, text, {
+            parse_mode: 'HTML',
+            message_thread_id: API_LOG_TOPIC_ID
+        });
+        return msg.message_id;
+    } catch (err) {
+        logger.error('Failed to send API Request Log', err.message);
+        return null;
+    }
+}
+
+/**
+ * Send API Response Log as Reply
+ */
+async function notifyApiLogResponse(bot, response, requestMsgPromise) {
+    if (!CHANNEL_ID || !API_LOG_TOPIC_ID) return;
+
+    try {
+        // Wait for request message ID to be available
+        const replyToId = await requestMsgPromise;
+        if (!replyToId) return;
+
+        const waktu = logger.formatDate(new Date().toISOString());
+        const data = response && response.data ? JSON.stringify(response.data, null, 2) : 'No Data';
+
+        const text = `📥 <b>API RESPONSE</b>\n` +
+                     `<code>${waktu}</code>\n` +
+                     `---------------------------\n` +
+                     `<pre>${data}</pre>`;
+
+        await bot.telegram.sendMessage(CHANNEL_ID, text, {
+            parse_mode: 'HTML',
+            message_thread_id: API_LOG_TOPIC_ID,
+            reply_to_message_id: replyToId
+        });
+    } catch (err) {
+        logger.error('Failed to send API Response Log', err.message);
+    }
+}
+
+/**
  * Delete message from channel when order is deleted
  */
 async function deleteChannelMessage(bot, msgId) {
@@ -119,4 +177,4 @@ function updateMsgId(orderId, msgId) {
     }
 }
 
-module.exports = { notifyOrderUpdate, deleteChannelMessage };
+module.exports = { notifyOrderUpdate, deleteChannelMessage, notifyApiLogRequest, notifyApiLogResponse };
