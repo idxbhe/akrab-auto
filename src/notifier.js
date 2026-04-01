@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const CHANNEL_ID = process.env.ADMIN_CHANNEL_ID;
+const TOPIC_ID = process.env.ADMIN_TOPIC_ID ? Number(process.env.ADMIN_TOPIC_ID) : null;
 
 /**
  * Format message for Telegram Channel using pure HTML tags
@@ -65,12 +66,18 @@ async function notifyOrderUpdate(bot, orderId) {
         const text = formatMessage(order);
         const msgId = order.channel_msg_id;
 
+        const extra = { parse_mode: 'HTML' };
+        if (TOPIC_ID) {
+            extra.message_thread_id = TOPIC_ID;
+        }
+
         if (msgId) {
             try {
                 await bot.telegram.editMessageText(CHANNEL_ID, msgId, null, text, { parse_mode: 'HTML' });
             } catch (err) {
                 if (err.description && (err.description.includes('message to edit not found') || err.description.includes('message can\'t be edited'))) {
-                    const newMsg = await bot.telegram.sendMessage(CHANNEL_ID, text, { parse_mode: 'HTML' });
+                    // Try to send new message to the (potentially new) channel/topic
+                    const newMsg = await bot.telegram.sendMessage(CHANNEL_ID, text, extra);
                     updateMsgId(order.id, newMsg.message_id);
                 } else if (err.description && err.description.includes('message is not modified')) {
                     // Ignore
@@ -79,7 +86,7 @@ async function notifyOrderUpdate(bot, orderId) {
                 }
             }
         } else {
-            const newMsg = await bot.telegram.sendMessage(CHANNEL_ID, text, { parse_mode: 'HTML' });
+            const newMsg = await bot.telegram.sendMessage(CHANNEL_ID, text, extra);
             updateMsgId(order.id, newMsg.message_id);
         }
     } catch (err) {
