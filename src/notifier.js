@@ -152,14 +152,27 @@ async function notifyApiLogRequest(bot, config) {
 
     try {
         const waktu = logger.formatDate(new Date().toISOString());
-        const params = config.params ? JSON.stringify(config.params, null, 2) : '-';
+        
+        // Mask API Key before sending to Telegram to keep it secure
+        let safeParams = '-';
+        if (config.params) {
+            try {
+                const masked = { ...config.params };
+                if (masked.api_key) {
+                    masked.api_key = '******** (HIDDEN)';
+                }
+                safeParams = JSON.stringify(masked, null, 2);
+            } catch (e) {
+                safeParams = '[Object]';
+            }
+        }
         
         const text = `🚀 <b>API REQUEST</b>\n` +
                      `<code>${waktu}</code>\n` +
                      `---------------------------\n` +
                      `<b>Method:</b> <code>${(config.method || 'GET').toUpperCase()}</code>\n` +
                      `<b>URL:</b> <code>${config.url}</code>\n` +
-                     `<b>Params:</b>\n<pre>${params}</pre>`;
+                     `<b>Params:</b>\n<pre>${safeParams}</pre>`;
 
         const msg = await queue.push(() => bot.telegram.sendMessage(CHANNEL_ID, text, {
             parse_mode: 'HTML',
