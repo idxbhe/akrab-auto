@@ -68,10 +68,11 @@ async function checkAndProcess(bot) {
                             // Pengecekan kedua masih error, reset ke UNPROCESSED
                             logger.error(`Order ${order.id} masih HTTP_CLIENT_RESPONSE_BODY_ERR. Auto-retry (Reset ke UNPROCESSED).`);
                             const newReffId = generateReffId(order.nomor, order.kode_produk, order.nama_produk);
+                            const oldKet = order.keterangan || 'HTTP_CLIENT_ERR';
                             db.get('preorders').find({ id: order.id }).assign({
                                 status: 'UNPROCESSED',
                                 reff_id: newReffId,
-                                keterangan: 'Auto-retry: HTTP_CLIENT_ERR',
+                                keterangan: `♻️ Auto-retry (Last: ${oldKet})`,
                                 updated_at: new Date().toISOString(),
                                 next_status_check: 0,
                                 empty_check_count: 0,
@@ -83,11 +84,12 @@ async function checkAndProcess(bot) {
                         // Penanganan GAGAL - Stock Transaksi Habis (Auto-retry sesuai feedback user)
                         logger.warn(`Order ${order.id} GAGAL (Stock Habis). Auto-retry (Reset ke UNPROCESSED).`);
                         const newReffId = generateReffId(order.nomor, order.kode_produk, order.nama_produk);
-                        
+                        const oldKet = hData.keterangan || 'STOCK HABIS';
+
                         db.get('preorders').find({ id: order.id }).assign({
                             status: 'UNPROCESSED',
                             reff_id: newReffId,
-                            keterangan: 'Auto-retry: ' + hData.keterangan,
+                            keterangan: `♻️ Auto-retry (Last: ${oldKet})`,
                             updated_at: new Date().toISOString(),
                             next_status_check: 0,
                             empty_check_count: 0,
@@ -203,10 +205,11 @@ async function checkAndProcess(bot) {
 
     const currentPreorders = db.get('preorders').value() || [];
     
-    // Proactive Pending Guard: Cek antrean aktif di lokal
-    const activeOrders = currentPreorders.filter(p => p.status === 'EXECUTED' || p.status === 'PENDING');
-    if (activeOrders.length >= 2) {
-        logger.debug(`Batas pending tercapai (${activeOrders.length}). Menunda eksekusi UNPROCESSED.`);
+    // Proactive Pending Guard: Hitung antrean aktif di lokal
+    let currentPendingCount = currentPreorders.filter(p => p.status === 'EXECUTED' || p.status === 'PENDING').length;
+    
+    if (currentPendingCount >= 2) {
+        logger.debug(`Batas pending tercapai (${currentPendingCount}). Menunda eksekusi UNPROCESSED.`);
         return;
     }
 
@@ -234,6 +237,12 @@ async function checkAndProcess(bot) {
     }
 
     for (const preorder of unprocessedOrders) {
+        // Cek kembali batas pending di setiap iterasi loop
+        if (currentPendingCount >= 2) {
+            logger.debug(`Batas pending tercapai saat iterasi (${currentPendingCount}). Menghentikan sisa eksekusi di siklus ini.`);
+            break;
+        }
+
         const productStock = stocks.find(s => 
             (s.type && s.type.toUpperCase() === preorder.kode_produk.toUpperCase()) || 
             (s.kode_produk && s.kode_produk.toUpperCase() === preorder.kode_produk.toUpperCase()) ||
@@ -267,6 +276,8 @@ async function checkAndProcess(bot) {
                 logger.info(`Hasil Trx ${preorder.id}:`, trxRes);
                 
                 if (trxRes.ok) {
+                    currentPendingCount++; // Tambah count setelah sukses kirim (ok: true)
+                    
                     const firstDelay = isPeak ? 5000 : 10000;
                     db.get('preorders')
                       .find({ id: preorder.id })

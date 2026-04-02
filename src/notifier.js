@@ -64,7 +64,8 @@ function formatMessage(order) {
     
     let statusEmoji = '';
     let statusKet = '';
-    const status = (order.status || '').toUpperCase();
+    let displayStatus = order.status || '';
+    const status = displayStatus.toUpperCase();
 
     if (status === 'SUKSES') {
         statusEmoji = ' ✅';
@@ -73,8 +74,14 @@ function formatMessage(order) {
         statusEmoji = ' ❌';
         statusKet = `⚠️ ${order.keterangan || 'Gagal'}`;
     } else if (status === 'UNPROCESSED') {
-        statusEmoji = ' 🔄';
-        statusKet = 'Menunggu stok.';
+        if ((order.keterangan || '').includes('♻️')) {
+            displayStatus = 'RETRYING ♻️';
+            statusEmoji = ' 🔄';
+            statusKet = `Mencoba ulang...\n${order.keterangan}`;
+        } else {
+            statusEmoji = ' 🔄';
+            statusKet = 'Menunggu stok.';
+        }
     } else if (status === 'PENDING') {
         statusEmoji = ' ⏳';
         statusKet = 'Sedang diproses server...';
@@ -93,7 +100,7 @@ function formatMessage(order) {
            `<code>${separator}</code>\n` +
            `<code>Nomor  :</code> <code>${order.nomor}</code>\n` +
            `<code>Paket  :</code> <code>${order.nama_produk}</code>\n\n\n` +
-           `<code>Status :</code> <code>${order.status}</code>\n` +
+           `<code>Status :</code> <code>${displayStatus}</code>\n` +
            `<pre>${statusKet}</pre>\n` +
            `<code>${separator}</code>\n` +
            `🕒 <b>Update :</b> <code>${waktu}</code>`;

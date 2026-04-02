@@ -349,12 +349,17 @@ bot.hears('📋 List', async (ctx) => {
     ctx.reply('📋 <b>Daftar Pre-Order:</b>', { parse_mode: 'HTML', ...mainMenu });
     
     for (const p of preorders) {
+        let displayStatus = p.status;
+        if (p.status === 'UNPROCESSED' && (p.keterangan || '').includes('♻️')) {
+            displayStatus = 'RETRYING ♻️';
+        }
+
         let msg = `<code>Nomor  :</code> <code>${p.nomor}</code>\n`;
         msg += `<code>Paket  :</code> <code>${p.nama_produk} (${p.kode_produk})</code>\n`;
-        msg += `<code>Status :</code> <code>${p.status}</code>\n`;
+        msg += `<code>Status :</code> <code>${displayStatus}</code>\n`;
         
-        if (p.status === 'GAGAL') {
-            msg += `<pre>⚠ ${p.keterangan || 'Gagal tanpa alasan'}</pre>\n`;
+        if (p.keterangan) {
+            msg += `<pre>ℹ️ ${p.keterangan}</pre>\n`;
         }
         
         msg += `---------------------------------------------------------`;
@@ -597,24 +602,25 @@ bot.action(/retrybtn_(.+)/, async (ctx) => {
         return ctx.answerCbQuery('❌ Pre-order tidak ditemukan.', { show_alert: true });
     }
 
+    const oldKet = p.keterangan || 'Gagal sebelumnya';
     const newReffId = generateReffId(p.nomor, p.kode_produk, p.nama_produk);
     db.get('preorders')
         .find({ id: p.id })
         .assign({
             reff_id: newReffId,
             status: 'UNPROCESSED',
-            keterangan: 'Retried manually',
+            keterangan: `♻️ Retry (Last: ${oldKet})`,
             updated_at: new Date().toISOString(),
             next_status_check: 0,
             empty_check_count: 0
         })
         .write();
 
-    await ctx.answerCbQuery('🔄 Order di-reset ke UNPROCESSED dengan Reff ID baru.', { show_alert: true });
+    await ctx.answerCbQuery('🔄 Order di-reset ke RETRYING dengan Reff ID baru.', { show_alert: true });
     
-    const retryMsg = `🔄 <b>ORDER BERHASIL DI-RESET</b>\n\n` +
+    const retryMsg = `🔄 <b>ORDER BERHASIL DI-RETRY</b>\n\n` +
                      `<code>Nomor   : ${p.nomor}</code>\n` +
-                     `<code>Status  : UNPROCESSED</code>\n` +
+                     `<code>Status  : RETRYING ♻️</code>\n` +
                      `<code>Reff ID : ${newReffId}</code>\n` +
                      `---------------------------------------------------------\n` +
                      `Waktu   : ${logger.formatDate(new Date().toISOString())}`;
