@@ -79,6 +79,21 @@ async function checkAndProcess(bot) {
                             }).write();
                             continue;
                         }
+                    } else if (keterangan.includes('STOCK TRANSAKSI HABIS')) {
+                        // Penanganan GAGAL - Stock Transaksi Habis (Auto-retry sesuai feedback user)
+                        logger.warn(`Order ${order.id} GAGAL (Stock Habis). Auto-retry (Reset ke UNPROCESSED).`);
+                        const newReffId = generateReffId(order.nomor, order.kode_produk, order.nama_produk);
+                        
+                        db.get('preorders').find({ id: order.id }).assign({
+                            status: 'UNPROCESSED',
+                            reff_id: newReffId,
+                            keterangan: 'Auto-retry: ' + hData.keterangan,
+                            updated_at: new Date().toISOString(),
+                            next_status_check: 0,
+                            empty_check_count: 0,
+                            http_err_count: 0
+                        }).write();
+                        continue;
                     } else if (order.http_err_count) {
                         // Reset jika error sudah hilang
                         db.get('preorders').find({ id: order.id }).assign({ http_err_count: 0 }).write();
