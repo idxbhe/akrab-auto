@@ -40,24 +40,27 @@ module.exports = (bot) => {
                 const currentMsgId = order.channel_msg_id;
                 
                 const cached = orderCache.get(cacheKey);
+                const isActiveStatus = ['UNPROCESSED', 'PENDING', 'EXECUTED'].includes((currentStatus || '').toUpperCase());
+                const isChanged = cached && (cached.status !== currentStatus || cached.updatedAt !== currentUpdatedAt || cached.msgId !== currentMsgId);
 
-                if (!cached || cached.status !== currentStatus || cached.updatedAt !== currentUpdatedAt || cached.msgId !== currentMsgId) {
-                    
-                    // Skip notification for very old history orders on startup to avoid spam
-                    const isNewOrRecent = !cached || (Date.now() - new Date(currentUpdatedAt).getTime() < 60000);
-                    
-                    if (isNewOrRecent) {
-                        logger.debug(`Observer: Order ${order.id} update detected. Notifying channel...`);
-                        await notifyOrderUpdate(bot, order.id);
-                    }
+                // TRIGGER NOTIFICATION
+                // Case A: First discovery (startup/migration) AND it's an active order
+                // Case B: Already tracked order AND something changed (progress update)
+                if ((!cached && isActiveStatus) || isChanged) {
+                    logger.debug(`Observer: Triggering notification for order ${order.id} (${currentStatus})`);
+                    await notifyOrderUpdate(bot, order.id);
+                }
 
-                    // Refresh cache with latest data from DB (including potential new msgId)
-                    const updatedOrder = [...db.get('preorders').value(), ...historyDb.get('history').value()].find(o => o.id === order.id);
+                // UPDATE CACHE
+                // Update cache if first time seen or if data changed, to keep it in sync
+                if (!cached || isChanged) {
+                    // Re-fetch latest data to get potentially updated channel_msg_id from notifyOrderUpdate
+                    const latestOrder = [...db.get('preorders').value(), ...history].find(o => o.id === order.id);
                     
                     orderCache.set(cacheKey, {
                         status: currentStatus,
                         updatedAt: currentUpdatedAt,
-                        msgId: updatedOrder ? updatedOrder.channel_msg_id : currentMsgId
+                        msgId: latestOrder ? latestOrder.channel_msg_id : currentMsgId
                     });
                 }
             }
