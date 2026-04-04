@@ -1,6 +1,6 @@
 const bot = require('./src/bot');
 const { startChecker } = require('./src/checker');
-const logger = require('./logger');
+const logger = require('./src/logger');
 const { db, historyDb } = require('./src/db');
 const { queue } = require('./src/notifier');
 const express = require('express');
