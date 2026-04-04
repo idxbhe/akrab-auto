@@ -14,7 +14,7 @@ class TelegramQueue {
     constructor() {
         this.queue = [];
         this.isProcessing = false;
-        this.delay = 50; // Base delay between messages in ms
+        this.delay = 1000; // Safe delay (1s) between messages to avoid Telegram flood limits
     }
 
     async push(task) {
@@ -33,19 +33,23 @@ class TelegramQueue {
             try {
                 const result = await task();
                 resolve(result);
+                // Always wait after a successful task to maintain safe throughput
                 await new Promise(r => setTimeout(r, this.delay));
             } catch (err) {
                 if (err.response && err.response.error_code === 429) {
-                    const retryAfter = (err.response.parameters.retry_after || 1) * 1000;
-                    logger.warn(`Telegram Rate Limit (429). Waiting ${retryAfter}ms...`);
+                    const retryAfter = (err.response.parameters.retry_after || 5) * 1000;
+                    logger.warn(`Telegram Rate Limit (429) triggered. Pausing queue for ${retryAfter}ms...`);
                     
-                    // Put task back to front
+                    // Put task back to front to preserve order
                     this.queue.unshift({ task, resolve, reject });
                     
                     await new Promise(r => setTimeout(r, retryAfter));
-                    // Continue loop
+                    // The loop continues, retrying the task
                 } else {
+                    // For non-429 errors, we still wait a bit before next task to be safe
+                    logger.error('Telegram API Error in Queue:', err.message);
                     reject(err);
+                    await new Promise(r => setTimeout(r, this.delay));
                 }
             }
         }
@@ -246,4 +250,4 @@ function updateMsgId(orderId, msgId) {
     }
 }
 
-module.exports = { notifyOrderUpdate, deleteChannelMessage, notifyApiLogRequest, notifyApiLogResponse };
+module.exports = { queue, notifyOrderUpdate, deleteChannelMessage, notifyApiLogRequest, notifyApiLogResponse };

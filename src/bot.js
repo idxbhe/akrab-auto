@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { startChecker, broadcastToAdmins, isPeakHour } = require('./checker');
 const { db, historyDb } = require('./db');
-const { generateReffId } = require('./utils');
+const { generateReffId, getTrackData } = require('./utils');
 const logger = require('./logger');
 const api = require('./api');
 const dotenv = require('dotenv');
@@ -656,6 +656,76 @@ bot.command('list', (ctx) => bot.handleUpdate({ ...ctx.update, message: { text: 
 bot.command('hapus', (ctx) => ctx.scene.enter('delete-preorder'));
 bot.command('edit', (ctx) => ctx.scene.enter('edit-preorder'));
 bot.command('history', (ctx) => bot.handleUpdate({ ...ctx.update, message: { text: '📜 History' } }));
+
+bot.hears(/^\/track\s+(.+)/, async (ctx) => {
+    const nomor = ctx.match[1].trim();
+    if (!nomor) {
+        return ctx.reply('⚠️ Harap masukkan nomor: <code>/track 08xxx</code>', { parse_mode: 'HTML' });
+    }
+
+    // 1. Find the latest session for this number
+    const active = db.get('preorders').filter({ nomor }).value() || [];
+    const history = historyDb.get('history').filter({ nomor }).value() || [];
+    const all = [...active, ...history].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    
+    if (all.length === 0) {
+        return ctx.reply(`❌ Tidak ada data pesanan untuk nomor <code>${nomor}</code> di database.`, { parse_mode: 'HTML' });
+    }
+
+    const latestSession = all[0];
+    const startTime = latestSession.created_at;
+
+    // 2. Get paired logs starting from that session
+    const pairs = getTrackData(nomor, startTime);
+    if (!pairs || pairs.length === 0) {
+        return ctx.reply(`❌ Tidak ditemukan riwayat API untuk nomor <code>${nomor}</code> sejak sesi terakhir (${logger.formatDate(startTime)}).`, { parse_mode: 'HTML' });
+    }
+
+    await ctx.reply(`🔍 <b>TRACKING SESI TERBARU: ${nomor}</b>\nSesi dimulai: <code>${logger.formatDate(startTime)}</code>\nMenampilkan max 3 sesi API terbaru...`, { parse_mode: 'HTML' });
+
+    // Show only last 3 pairs to avoid flooding
+    const latestPairs = pairs.slice(-3);
+
+    for (const pair of latestPairs) {
+        const req = pair.request;
+        const res = pair.response;
+
+        const reqTime = req.header.match(/\[(.*?)\]/)[1];
+        const reqAction = req.header.match(/\[API\] \[(.*?)\]/)[1];
+        const reqData = req.dataLines.join('\n').trim();
+
+        // 1. Format Request (Same as notifyApiLogRequest in notifier.js)
+        const reqText = `🚀 <b>API REQUEST</b>\n` +
+                        `<code>${reqTime}</code>\n` +
+                        `---------------------------\n` +
+                        `<b>Action:</b> <code>${reqAction}</code>\n` +
+                        `<b>Params:</b>\n<pre>${reqData || '-'}</pre>`;
+
+        const reqMsg = await ctx.reply(reqText, { parse_mode: 'HTML' });
+
+        if (res) {
+            const resTime = res.header.match(/\[(.*?)\]/)[1];
+            const resAction = res.header.match(/\[API\] \[(.*?)\]/)[1];
+            const resData = res.dataLines.join('\n').trim();
+
+            // 2. Format Response (Same as notifyApiLogResponse in notifier.js)
+            const resText = `📥 <b>API RESPONSE</b>\n` +
+                            `<code>${resTime}</code>\n` +
+                            `---------------------------\n` +
+                            `<b>Action:</b> <code>${resAction}</code>\n` +
+                            `<pre>${resData || 'No Data'}</pre>`;
+
+            await ctx.reply(resText, { 
+                parse_mode: 'HTML', 
+                reply_to_message_id: reqMsg.message_id 
+            });
+        } else {
+            await ctx.reply('⚠️ No matching response found in logs for this request.', { 
+                reply_to_message_id: reqMsg.message_id 
+            });
+        }
+    }
+});
 
 bot.command('exportlog', async (ctx) => {
     const botLogPath = path.join(__dirname, '..', 'logs', 'bot.log');

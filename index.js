@@ -1,7 +1,8 @@
 const bot = require('./src/bot');
 const { startChecker } = require('./src/checker');
-const logger = require('./src/logger');
+const logger = require('./logger');
 const { db, historyDb } = require('./src/db');
+const { queue } = require('./src/notifier');
 const express = require('express');
 const dotenv = require('dotenv');
 dotenv.config();
@@ -76,7 +77,8 @@ app.all('/webhook', (req, res) => {
                               `Waktu   : ${logger.formatDate(new Date().toISOString())}`;
             
             for (const chatId of adminChatIds) {
-                bot.telegram.sendMessage(chatId, notifyMsg, { parse_mode: 'HTML' }).catch(e => logger.error(`Failed to notify admin ${chatId}`, e.message));
+                queue.push(() => bot.telegram.sendMessage(chatId, notifyMsg, { parse_mode: 'HTML' }))
+                     .catch(e => logger.error(`Failed to notify admin ${chatId} via queue`, e.message));
             }
 
             // If success, move to history

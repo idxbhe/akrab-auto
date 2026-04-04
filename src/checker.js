@@ -2,6 +2,7 @@ const api = require('./api');
 const { db, historyDb } = require('./db');
 const { generateReffId } = require('./utils');
 const logger = require('./logger');
+const { queue } = require('./notifier');
 
 function isPeakHour() {
     const now = new Date();
@@ -346,12 +347,12 @@ async function checkAndProcess(bot) {
                         
                         const adminChatIds = db.get('admin_chats').value() || [];
                         for (const chatId of adminChatIds) {
-                            bot.telegram.sendMessage(chatId, adminMsg, { 
+                            queue.push(() => bot.telegram.sendMessage(chatId, adminMsg, { 
                                 parse_mode: 'HTML',
                                 ...Markup.inlineKeyboard([
                                     Markup.button.callback('✅ Saldo Sudah Diisi', 'resume_bot')
                                 ])
-                            }).catch(e => logger.error(`Failed to notify admin ${chatId}`, e.message));
+                            })).catch(e => logger.error(`Failed to notify admin ${chatId}`, e.message));
                         }
                         
                         break; // Stop checking other UNPROCESSED in this cycle
@@ -372,9 +373,10 @@ function broadcastToAdmins(bot, message) {
     const adminChatIds = db.get('admin_chats').value() || [];
     
     for (const chatId of adminChatIds) {
-        bot.telegram.sendMessage(chatId, message, { parse_mode: 'HTML' }).catch(e => {
-            logger.error(`Failed to send message to ${chatId}`, e.message);
-        });
+        queue.push(() => bot.telegram.sendMessage(chatId, message, { parse_mode: 'HTML' }))
+             .catch(e => {
+                logger.error(`Failed to send message to ${chatId} via queue`, e.message);
+             });
     }
 }
 
